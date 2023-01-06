@@ -4,6 +4,12 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 from usaspending_api.awards.models.award import vw_awards_sql
+from usaspending_api.common.matview_manager import OVERLAY_VIEWS
+from django.core.management import call_command
+
+
+def rebuild_mv_agency_autocomplete(apps, schema_editor):
+    call_command('matview_runner', '--only', 'mv_agency_autocomplete')
 
 
 class Migration(migrations.Migration):
@@ -39,6 +45,24 @@ class Migration(migrations.Migration):
                     table='vw_awards',
                 )
             ]
+        ),
+        # Drop the dependent views
+        migrations.RunSQL(
+            sql="DROP MATERIALIZED VIEW IF EXISTS mv_agency_autocomplete",
+            reverse_sql="",
+        ),
+        migrations.RunSQL(
+            sql="DROP VIEW IF EXISTS vw_es_award_search",
+            reverse_sql="",
+        ),
+        # Recreate the dependent views
+        migrations.RunPython(
+            code=rebuild_mv_agency_autocomplete,
+            reverse_code=None,
+        ),
+        migrations.RunSQL(
+            sql=OVERLAY_VIEWS[0].read_text(),
+            reverse_sql="",
         ),
         migrations.AlterModelOptions(
             name='award',
