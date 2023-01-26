@@ -863,7 +863,7 @@ transaction_search_load_sql_string = fr"""
     LEFT OUTER JOIN
         global_temp.references_cfda ON (transaction_fabs.cfda_number = references_cfda.program_number)
     LEFT OUTER JOIN
-        rpt.recipient_lookup ON (
+        phase2_20230126.recipient_lookup ON (
             recipient_lookup.recipient_hash = REGEXP_REPLACE(MD5(UPPER(
                 CASE
                     WHEN COALESCE(transaction_fpds.awardee_or_recipient_uei, transaction_fabs.uei) IS NOT NULL
@@ -894,7 +894,7 @@ transaction_search_load_sql_string = fr"""
         (SELECT id, toptier_agency_id, ROW_NUMBER() OVER (PARTITION BY toptier_agency_id ORDER BY toptier_flag DESC, id ASC) AS row_num FROM global_temp.agency) AS FA_ID
         ON (FA_ID.toptier_agency_id = TFA.toptier_agency_id AND row_num = 1)
     LEFT OUTER JOIN
-        rpt.recipient_lookup PRL ON (
+        phase2_20230126.recipient_lookup PRL ON (
             PRL.recipient_hash = REGEXP_REPLACE(MD5(UPPER(
                 CASE
                     WHEN COALESCE(transaction_fpds.ultimate_parent_uei, transaction_fabs.ultimate_parent_uei) IS NOT NULL
@@ -907,7 +907,7 @@ transaction_search_load_sql_string = fr"""
         )
     LEFT OUTER JOIN (
         SELECT recipient_hash, uei, SORT_ARRAY(COLLECT_SET(recipient_level)) AS recipient_levels
-        FROM rpt.recipient_profile
+        FROM phase2_20230126.recipient_profile
         GROUP BY recipient_hash, uei
     ) RECIPIENT_HASH_AND_LEVELS ON (
         recipient_lookup.recipient_hash = RECIPIENT_HASH_AND_LEVELS.recipient_hash

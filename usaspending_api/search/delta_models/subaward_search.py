@@ -234,7 +234,7 @@ subaward_search_load_sql_string = fr"""
           duns,
           ROW_NUMBER() OVER(PARTITION BY uei ORDER BY uei, duns NULLS LAST, legal_business_name NULLS LAST) AS row
         FROM
-            rpt.recipient_lookup AS rlv
+            phase2_20230126.recipient_lookup AS rlv
     ),
     tas_summary AS (
         SELECT
