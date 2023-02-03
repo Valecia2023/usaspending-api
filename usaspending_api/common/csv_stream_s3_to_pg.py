@@ -28,6 +28,9 @@ from typing import Iterable, List
 
 from botocore.client import BaseClient
 from pandas.io.sql import SQLTable
+from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Engine
+from sqlalchemy.engine import Connection
 
 from usaspending_api.common.logging import AbbrevNamespaceUTCFormatter, ensure_logging
 from usaspending_api.config import CONFIG
@@ -203,14 +206,13 @@ def copy_data_as_csv_to_pg(
     partition_prefix = f"Partition#{partition_idx}: "
     logger.info(f"{partition_prefix}Starting write of a batch on partition {partition_idx}")
     try:
-        with psycopg2.connect(dsn=db_dsn) as connection:
-            connection.autocommit = True
-            rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, dbapi_conn=connection, method="copy")
-            batch_elapsed = time.time() - batch_start
-            logger.info(
-                f"{partition_prefix}Finished writing batch of {rowcount} CSV-formatted records"
-                f"on partition {partition_idx} in {batch_elapsed:.3f}s"
-            )
+        sqlalchemy_engine = create_engine(db_dsn)
+        rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_engine, method="copy")
+        batch_elapsed = time.time() - batch_start
+        logger.info(
+            f"{partition_prefix}Finished writing batch of {rowcount} CSV-formatted records"
+            f"on partition {partition_idx} in {batch_elapsed:.3f}s"
+        )
     except Exception as exc_batch:
         logger.error(f"{partition_prefix}ERROR writing batch/partition number {partition_idx}")
         logger.exception(exc_batch)
@@ -218,13 +220,13 @@ def copy_data_as_csv_to_pg(
     return [rowcount]
 
 
-def insert_pandas_dataframe(df: pd.DataFrame, table: str, dbapi_conn, method=None):
+def insert_pandas_dataframe(df: pd.DataFrame, table: str, engine: Engine, method: str = None):
     """Inserts a dataframe to the specified database table.
 
     Args:
         df (pd.DataFrame): data to insert
         table (str): name of table to insert to
-        dbapi_conn (psycopg2 Connection): db connection
+        engine (sqlalchemy.engine.base.Engine): SQLAlchemy engine that builds connections to the DB
         method: one of 'multi' or 'copy', if not None
             - 'multi': does a multi-value bulk insert (many value rows at once). It is efficient for analytics
                 databases with few columns, and esp. if columnar storage, but not as efficient for
@@ -233,13 +235,13 @@ def insert_pandas_dataframe(df: pd.DataFrame, table: str, dbapi_conn, method=Non
     """
     if method == "copy":
         method = _insert_pandas_dataframe_using_copy
-    rowcount = df.to_sql(name=table, con=dbapi_conn, index=False, if_exists="append", method=method)
+    rowcount = df.to_sql(name=table, con=engine, index=False, if_exists="append", method=method)
     if rowcount:  # returns may not be supported til Pandas 1.4.x+
         return rowcount
     return len(df.index)
 
 
-def _insert_pandas_dataframe_using_copy(table: SQLTable, dbapi_conn, fields: List[str], data: Iterable[Iterable]):
+def _insert_pandas_dataframe_using_copy(table: SQLTable, conn: Connection, fields: List[str], data: Iterable[Iterable]):
     """Callable concrete impl of the pandas.DataFrame.to_sql method parameter, which allows the given
     DataFrame's data to be buffered in-memory as a string in CSV format, and then loaded into the
     database via the given connection using COPY <table> (<cols>) FROM STDIN WITH CSV.
@@ -248,23 +250,25 @@ def _insert_pandas_dataframe_using_copy(table: SQLTable, dbapi_conn, fields: Lis
 
     Args:
         table (pandas.io.sql.SQLTable): name of existing table to bulk insert into via COPY
-        dbapi_conn (psycopg2 Connection): db connection
+        conn (sqlalchemy.engine.Connection): DB connection derived from the provided Engine, and handed to this
+            function by the pandas.DataFrame.to_sql function
         fields (List[str]): column names
         data (Iterable[Iterable]): iterable data set, where each item is a collection of values for a data row
     """
-    # US DB API connection that can provide a cursor
-    with dbapi_conn.cursor() as cursor:
-        string_buffer = StringIO()
-        writer = csv.writer(string_buffer)
-        writer.writerows(data)
-        string_buffer.seek(0)
+    # Use DB API connection that can provide a cursor
+    with closing(conn.connection) as dbapi_conn:
+        with dbapi_conn.cursor() as cursor:
+            string_buffer = StringIO()
+            writer = csv.writer(string_buffer)
+            writer.writerows(data)
+            string_buffer.seek(0)
 
-        columns = ", ".join(f'"{f}"' for f in fields)
-        if table.schema:
-            table_name = f"{table.schema}.{table.name}"
-        else:
-            table_name = table.name
+            columns = ", ".join(f'"{f}"' for f in fields)
+            if table.schema:
+                table_name = f"{table.schema}.{table.name}"
+            else:
+                table_name = table.name
 
-        sql = f"COPY {table_name} ({columns}) FROM STDIN WITH CSV"
-        cursor.copy_expert(sql=sql, file=string_buffer)
-        return cursor.rowcount
+            sql = f"COPY {table_name} ({columns}) FROM STDIN WITH CSV"
+            cursor.copy_expert(sql=sql, file=string_buffer)
+            return cursor.rowcount
