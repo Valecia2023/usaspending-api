@@ -462,8 +462,13 @@ class Command(BaseCommand):
             target_pg_table=temp_table,
         ), schema=output_schema)
 
-        total_records = rowcounts_df.select(pyspark_sum("rowcount")).collect()[0][0]
-        total_batches = rowcounts_df.count()
+        from pyspark.sql.functions import count
+        # NOTE: Only interact with the results pyspark DataFrame once. Invoking an action runs the DB inserts within
+        # the mapped function. They will not insert until the DF is acted upon (here)
+        total_batches, total_records = tuple(
+            rowcounts_df.select(count("rowcount"), pyspark_sum("rowcount")).collect()[0]
+        )
+        # total_batches = rowcounts_df.count()
 
         self.logger.info(
             f"LOAD: Finished SQL bulk COPY of {total_records} records in {total_batches} "
