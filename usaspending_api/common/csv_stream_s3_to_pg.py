@@ -36,7 +36,7 @@ from usaspending_api.common.logging import AbbrevNamespaceUTCFormatter, ensure_l
 from usaspending_api.config import CONFIG
 from usaspending_api.settings import LOGGING
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("script")
 
 
 def _get_boto3_s3_client() -> BaseClient:
@@ -199,7 +199,7 @@ def copy_data_as_csv_to_pg(
     """Process a partition of data records, converting them to in-memory CSV format and using SQL COPY to
     insert them into Postgres. Instantiate the psycopg2 DB connection only once per partition.
     """
-    ensure_logging(logging_config_dict=LOGGING, formatter_class=AbbrevNamespaceUTCFormatter, logger_to_use=logger)
+    #ensure_logging(logging_config_dict=LOGGING, formatter_class=AbbrevNamespaceUTCFormatter, logger_to_use=logger)
     # Consume Iterator (generator) by Pandas DataFrame WITHOUT iterating it (into memory) yet
     pdf = pd.DataFrame(partition_data)
     batch_start = time.time()
