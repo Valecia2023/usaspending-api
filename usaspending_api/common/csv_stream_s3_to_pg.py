@@ -195,13 +195,15 @@ def copy_data_as_csv_to_pg(
     partition_data: Iterable[str],
     db_dsn: str,
     target_pg_table: str,
+    ordered_col_names: List[str],
 ):
     """Process a partition of data records, converting them to in-memory CSV format and using SQL COPY to
     insert them into Postgres. Instantiate the psycopg2 DB connection only once per partition.
     """
-    #ensure_logging(logging_config_dict=LOGGING, formatter_class=AbbrevNamespaceUTCFormatter, logger_to_use=logger)
+    ensure_logging(logging_config_dict=LOGGING, formatter_class=AbbrevNamespaceUTCFormatter, logger_to_use=logger)
     # Consume Iterator (generator) by Pandas DataFrame WITHOUT iterating it (into memory) yet
     pdf = pd.DataFrame(partition_data)
+    pdf.columns = ordered_col_names
     batch_start = time.time()
     partition_prefix = f"Partition#{partition_idx}: "
     logger.info(f"{partition_prefix}Starting write of a batch on partition {partition_idx}")

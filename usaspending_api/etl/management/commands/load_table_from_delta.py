@@ -46,7 +46,7 @@ _PG_WORK_MEM_FOR_LARGE_CSV_COPY = 256 * 1024  # MiB of work_mem * KiBs in 1 MiB
 
 class Command(BaseCommand):
 
-    logger: logging.Logger
+    logger: logging.Logger = logging.getLogger("script")
 
     help = """
     This command reads data from a Delta table and copies it into a corresponding Postgres database table (under a
@@ -172,9 +172,6 @@ class Command(BaseCommand):
         if not spark:
             spark_created_by_command = True
             spark = configure_spark_session(**extra_conf, spark_context=spark)  # type: SparkSession
-
-        # Setup Logger
-        self.logger = get_jvm_logger(spark, __name__)
 
         # Resolve Parameters
         delta_table = options["delta_table"]
@@ -342,7 +339,13 @@ class Command(BaseCommand):
                     overwrite=False,
                 )
             else:
-                self._write_with_pandas_sql_bulk_copy_in_mem_csv(df=df, temp_table=temp_table)
+                if not column_names:
+                    raise RuntimeError("column_names None or empty, but are required to map CSV cols to table cols")
+                self._write_with_pandas_sql_bulk_copy_in_mem_csv(
+                    df=df,
+                    temp_table=temp_table,
+                    ordered_col_names=column_names,
+                )
         except Exception as exc:
             if postgres_seq_last_value:
                 self.logger.error(
@@ -387,6 +390,7 @@ class Command(BaseCommand):
         self,
         df: DataFrame,
         temp_table: str,
+        ordered_col_names: List[str],
     ):
         """
         Write-from-delta-to-postgres strategy that uses SQL bulk COPY of CSV files to Postgres, but leverages Pandas and
@@ -397,6 +401,9 @@ class Command(BaseCommand):
             df (DataFrame): the source data, which will be written to CSV files before COPY to Postgres
             temp_table (str): the name of the temp table (qualified with schema if needed) in the target Postgres DB
                 where the CSV data will be written to with COPY
+            ordered_col_names (List[str]): Ordered list of column names that must match the order of columns in the CSV
+                - The DataFrame should have its columns ordered by this
+                - And the COPY command should provide these cols so that COPY pulls the right data into the right cols
         """
         df = convert_array_cols_to_string(df, is_postgres_array_format=True, is_for_csv_export=True)
 
@@ -430,6 +437,7 @@ class Command(BaseCommand):
                 partition_data=partition_data,
                 db_dsn=db_dsn,
                 target_pg_table=temp_table,
+                ordered_col_names=ordered_col_names,
             ),
         ).collect()
 
