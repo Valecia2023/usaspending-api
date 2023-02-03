@@ -461,6 +461,7 @@ class Command(BaseCommand):
             target_pg_table=temp_table,
         ), schema=output_schema)
 
+        print(rowcounts_pandas_df)
         total_records = rowcounts_pandas_df["rowcount"].sum()
         total_batches = len(rowcounts_pandas_df)
 
