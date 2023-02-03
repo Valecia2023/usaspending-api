@@ -243,7 +243,8 @@ def copy_pandas_dfs_as_csv_to_pg(
         partition_prefix = f"Partition#{partition_idx}: "
         logger.info(f"{partition_prefix}Starting write of a batch on partition {partition_idx}")
         try:
-            logger.info(f"{partition_prefix}Got Pandas DataFrame with {len(pdf)} rows and dtypes = {pdf.dtypes}")
+            with pd.option_context("display.max_rows", None):
+                logger.info(f"{partition_prefix}Got Pandas DataFrame with {len(pdf)} rows and dtypes = {pdf.dtypes}")
             rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_connection, method="copy")
             # Yield new Pandas DF holding rowcount for this batch COPY
             yield pd.DataFrame(data={"rowcount": rowcount}, index=[0])
