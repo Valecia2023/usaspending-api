@@ -262,19 +262,19 @@ def _insert_pandas_dataframe_using_copy(table: SQLTable, conn: Connection, field
         data (Iterable[Iterable]): iterable data set, where each item is a collection of values for a data row
     """
     # Use DB API connection that can provide a cursor
-    with closing(conn.connection) as dbapi_conn:
-        with dbapi_conn.cursor() as cursor:
-            string_buffer = StringIO()
-            writer = csv.writer(string_buffer)
-            writer.writerows(data)
-            string_buffer.seek(0)
+    dbapi_conn = conn.connection
+    with dbapi_conn.cursor() as cursor:
+        string_buffer = StringIO()
+        writer = csv.writer(string_buffer)
+        writer.writerows(data)
+        string_buffer.seek(0)
 
-            columns = ", ".join(f'"{f}"' for f in fields)
-            if table.schema:
-                table_name = f"{table.schema}.{table.name}"
-            else:
-                table_name = table.name
+        columns = ", ".join(f'"{f}"' for f in fields)
+        if table.schema:
+            table_name = f"{table.schema}.{table.name}"
+        else:
+            table_name = table.name
 
-            sql = f"COPY {table_name} ({columns}) FROM STDIN WITH CSV"
-            cursor.copy_expert(sql=sql, file=string_buffer)
-            return cursor.rowcount
+        sql = f"COPY {table_name} ({columns}) FROM STDIN WITH CSV"
+        cursor.copy_expert(sql=sql, file=string_buffer)
+        return cursor.rowcount
