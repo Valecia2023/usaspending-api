@@ -210,7 +210,8 @@ def copy_data_as_csv_to_pg(
     try:
         psycopg2_dialect_conn_string = db_dsn.replace("postgres://", "postgresql+psycopg2://")
         sqlalchemy_engine = create_engine(psycopg2_dialect_conn_string)
-        rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_engine, method="copy")
+        sqlalchemy_connection = sqlalchemy_engine.raw_connection()
+        rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_connection, method="copy")
         batch_elapsed = time.time() - batch_start
         logger.info(
             f"{partition_prefix}Finished writing batch of {rowcount} CSV-formatted records"
