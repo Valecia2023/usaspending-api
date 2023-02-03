@@ -234,15 +234,16 @@ def copy_pandas_dfs_as_csv_to_pg(
     insert them into Postgres. Instantiate the psycopg2 DB connection only once per partition.
     """
     ensure_logging(logging_config_dict=LOGGING, formatter_class=AbbrevNamespaceUTCFormatter, logger_to_use=logger)
+    psycopg2_dialect_conn_string = db_dsn.replace("postgres://", "postgresql+psycopg2://")
+    sqlalchemy_engine = create_engine(psycopg2_dialect_conn_string, isolation_level="AUTOCOMMIT")
+    sqlalchemy_connection = sqlalchemy_engine.connect()
     total_partitions = 0
     for partition_idx, pdf in enumerate(pandas_dfs):
         batch_start = time.time()
         partition_prefix = f"Partition#{partition_idx}: "
         logger.info(f"{partition_prefix}Starting write of a batch on partition {partition_idx}")
         try:
-            psycopg2_dialect_conn_string = db_dsn.replace("postgres://", "postgresql+psycopg2://")
-            sqlalchemy_engine = create_engine(psycopg2_dialect_conn_string, isolation_level="AUTOCOMMIT")
-            rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_engine, method="copy")
+            rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_connection, method="copy")
             # Yield new Pandas DF holding rowcount for this batch COPY
             yield pd.DataFrame(data={"rowcount": rowcount}, index=[0])
             batch_elapsed = time.time() - batch_start
