@@ -10,6 +10,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Model
 from math import ceil
 from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import sum as pyspark_sum
 from typing import Dict, Optional, List
 from datetime import datetime
 
@@ -455,20 +456,19 @@ class Command(BaseCommand):
         spark.sql(f"SET spark.sql.execution.arrow.maxRecordsPerBatch = {CONFIG.SPARK_PARTITION_ROWS}")
         from pyspark.sql.types import StructType, StructField, LongType
         output_schema = StructType([StructField(name="rowcount", dataType=LongType(), nullable=False)])
-        rowcounts_pandas_df = df.mapInPandas(lambda pandas_dfs: copy_pandas_dfs_as_csv_to_pg(
+        rowcounts_df = df.mapInPandas(lambda pandas_dfs: copy_pandas_dfs_as_csv_to_pg(
             pandas_dfs=pandas_dfs,
             db_dsn=db_dsn,
             target_pg_table=temp_table,
         ), schema=output_schema)
-        self.logger.info(f"Results = {rowcounts_pandas_df}")
-        print(rowcounts_pandas_df)
-        # total_records = rowcounts_pandas_df["rowcount"].sum()
-        # total_batches = len(rowcounts_pandas_df)
-        #
-        # self.logger.info(
-        #     f"LOAD: Finished SQL bulk COPY of {total_records} records in {total_batches} "
-        #     f"in-memory CSV batches to Postgres {temp_table} table"
-        # )
+
+        total_records = rowcounts_df.select(pyspark_sum("rowcount")).collect()[0][0]
+        total_batches = rowcounts_df.count()
+
+        self.logger.info(
+            f"LOAD: Finished SQL bulk COPY of {total_records} records in {total_batches} "
+            f"in-memory CSV batches to Postgres {temp_table} table"
+        )
 
     def _write_with_sql_bulk_copy_csv(
         self,
