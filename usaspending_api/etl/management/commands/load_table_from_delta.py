@@ -425,6 +425,11 @@ class Command(BaseCommand):
 
         db_dsn = get_database_dsn_string()
 
+        pandas_df = df.where("1 == 0").toPandas()
+        self.logger.info(f"Using pandas DF with cols: {pandas_df.columns}")
+        self.logger.info(f"Using pandas DF with shape: {pandas_df.shape}")
+        self.logger.info(f"Using pandas DF with shape: {pandas_df.dtypes}")
+
         # WARNING: rdd.map needs to use cloudpickle to pickle the mapped function, its arguments, and in-turn any
         # imported dependencies from either of those two as well as from the module from which the function is
         # imported. If at any point a new transitive dependency is introduced
@@ -438,6 +443,7 @@ class Command(BaseCommand):
                 db_dsn=db_dsn,
                 target_pg_table=temp_table,
                 ordered_col_names=ordered_col_names,
+                template_pandas_dataframe=pandas_df,
             ),
         ).collect()
 
