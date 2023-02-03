@@ -206,7 +206,8 @@ def copy_data_as_csv_to_pg(
     partition_prefix = f"Partition#{partition_idx}: "
     logger.info(f"{partition_prefix}Starting write of a batch on partition {partition_idx}")
     try:
-        sqlalchemy_engine = create_engine(db_dsn)
+        psycopg2_dialect_conn_string = db_dsn.replace("postgres://", "postgresql+psycopg2://")
+        sqlalchemy_engine = create_engine(psycopg2_dialect_conn_string)
         rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_engine, method="copy")
         batch_elapsed = time.time() - batch_start
         logger.info(
