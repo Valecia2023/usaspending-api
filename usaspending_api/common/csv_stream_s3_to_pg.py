@@ -236,7 +236,10 @@ def insert_pandas_dataframe(df: pd.DataFrame, table: str, engine: Engine, method
     """
     if method == "copy":
         method = _insert_pandas_dataframe_using_copy
-    rowcount = df.to_sql(name=table, con=engine, index=False, if_exists="append", method=method)
+    schema = None
+    if "." in table:
+        schema, table = tuple(table.split("."))
+    rowcount = df.to_sql(name=table, con=engine, schema=schema, index=False, if_exists="append", method=method)
     if rowcount:  # returns may not be supported til Pandas 1.4.x+
         return rowcount
     return len(df.index)
