@@ -13,7 +13,7 @@ from pyspark.sql import SparkSession, DataFrame
 from typing import Dict, Optional, List
 from datetime import datetime
 
-from usaspending_api.common.csv_stream_s3_to_pg import copy_csvs_from_s3_to_pg, copy_data_as_csv_to_pg
+from usaspending_api.common.csv_stream_s3_to_pg import copy_csvs_from_s3_to_pg, copy_data_as_csv_to_pg, copy_pandas_dfs_as_csv_to_pg
 from usaspending_api.common.etl.spark import convert_array_cols_to_string
 from usaspending_api.common.helpers.sql_helpers import get_database_dsn_string
 from usaspending_api.common.helpers.spark_helpers import (
@@ -342,6 +342,7 @@ class Command(BaseCommand):
                 if not column_names:
                     raise RuntimeError("column_names None or empty, but are required to map CSV cols to table cols")
                 self._write_with_pandas_sql_bulk_copy_in_mem_csv(
+                    spark=spark,
                     df=df,
                     temp_table=temp_table,
                     ordered_col_names=column_names,
@@ -388,6 +389,7 @@ class Command(BaseCommand):
 
     def _write_with_pandas_sql_bulk_copy_in_mem_csv(
         self,
+        spark: SparkSession,
         df: DataFrame,
         temp_table: str,
         ordered_col_names: List[str],
@@ -408,47 +410,62 @@ class Command(BaseCommand):
         df = convert_array_cols_to_string(df, is_postgres_array_format=True, is_for_csv_export=True)
 
         self.logger.info(f"LOAD: Starting mapping of Delta table partitions to COPY-able in-memory CSV files")
-        df_record_count = df.count()  # safe to doublecheck the count of the *actual* data being processed
-        partitions = ceil(df_record_count / CONFIG.SPARK_PARTITION_ROWS)
-        msg = (
-            f"Repartitioning {df_record_count} records from {df.rdd.getNumPartitions()} partitions into "
-            f"{partitions} partitions to evenly balance no more than "
-            f"{CONFIG.SPARK_PARTITION_ROWS} "
-            f"records per partition. Then handing each partition to available executors for processing."
-        )
-        self.logger.info(msg)
-        self.logger.info(
-            "Partition-processing task logs will be embedded in executor stderr logs, and not appear here."
-        )
-        df = df.repartition(partitions)
+        # df_record_count = df.count()  # safe to doublecheck the count of the *actual* data being processed
+        # partitions = ceil(df_record_count / CONFIG.SPARK_PARTITION_ROWS)
+        # msg = (
+        #     f"Repartitioning {df_record_count} records from {df.rdd.getNumPartitions()} partitions into "
+        #     f"{partitions} partitions to evenly balance no more than "
+        #     f"{CONFIG.SPARK_PARTITION_ROWS} "
+        #     f"records per partition. Then handing each partition to available executors for processing."
+        # )
+        # self.logger.info(msg)
+        # self.logger.info(
+        #     "Partition-processing task logs will be embedded in executor stderr logs, and not appear here."
+        # )
+        # df = df.repartition(partitions)
         self.logger.info(f"LOAD: Starting SQL bulk COPY of in-memory CSV data to Postgres {temp_table} table")
 
         db_dsn = get_database_dsn_string()
 
-        pandas_df = df.where("1 == 0").toPandas()
-        self.logger.info(f"Using pandas DF with cols: {pandas_df.columns}")
-        self.logger.info(f"Using pandas DF with shape: {pandas_df.shape}")
-        self.logger.info(f"Using pandas DF with shape: {pandas_df.dtypes}")
+        # pandas_df = df.where("1 == 0").toPandas()
+        # self.logger.info(f"Using pandas DF with cols: {pandas_df.columns}")
+        # self.logger.info(f"Using pandas DF with shape: {pandas_df.shape}")
+        # self.logger.info(f"Using pandas DF with shape: {pandas_df.dtypes}")
+        #
+        # # WARNING: rdd.map needs to use cloudpickle to pickle the mapped function, its arguments, and in-turn any
+        # # imported dependencies from either of those two as well as from the module from which the function is
+        # # imported. If at any point a new transitive dependency is introduced
+        # # into the mapped function, its module, or an arg of it ... that is not pickle-able, this will throw an error.
+        # # One way to help is to resolve all arguments to primitive types (int, string) that can be passed
+        # # to the mapped function
+        # batch_rowcounts = df.rdd.mapPartitionsWithIndex(
+        #     lambda partition_idx, partition_data: copy_data_as_csv_to_pg(
+        #         partition_idx=partition_idx,
+        #         partition_data=partition_data,
+        #         db_dsn=db_dsn,
+        #         target_pg_table=temp_table,
+        #         ordered_col_names=ordered_col_names,
+        #         template_pandas_dataframe=pandas_df,
+        #     ),
+        # ).collect()
+        #
+        # total_records = sum(batch_rowcounts)
+        # total_batches = len(batch_rowcounts)
 
-        # WARNING: rdd.map needs to use cloudpickle to pickle the mapped function, its arguments, and in-turn any
-        # imported dependencies from either of those two as well as from the module from which the function is
-        # imported. If at any point a new transitive dependency is introduced
-        # into the mapped function, its module, or an arg of it ... that is not pickle-able, this will throw an error.
-        # One way to help is to resolve all arguments to primitive types (int, string) that can be passed
-        # to the mapped function
-        batch_rowcounts = df.rdd.mapPartitionsWithIndex(
-            lambda partition_idx, partition_data: copy_data_as_csv_to_pg(
-                partition_idx=partition_idx,
-                partition_data=partition_data,
-                db_dsn=db_dsn,
-                target_pg_table=temp_table,
-                ordered_col_names=ordered_col_names,
-                template_pandas_dataframe=pandas_df,
-            ),
-        ).collect()
+        spark.sql(f"SET spark.sql.execution.arrow.maxRecordsPerBatch = {CONFIG.SPARK_PARTITION_ROWS}")
+        from pyspark.sql.types import StructType, StructField, LongType
+        output_schema = StructType([StructField(name="rowcount", dataType=LongType(), nullable=False)])
+        rowcounts_pandas_df = df.mapInPandas(lambda pandas_dfs: copy_pandas_dfs_as_csv_to_pg(
+            pandas_dfs=pandas_dfs,
+            db_dsn=db_dsn,
+            target_pg_table=temp_table,
+        ), schema=output_schema)
+
+        total_records = rowcounts_pandas_df["rowcount"].sum()
+        total_batches = len(rowcounts_pandas_df)
 
         self.logger.info(
-            f"LOAD: Finished SQL bulk COPY of {sum(batch_rowcounts)} records in {len(batch_rowcounts)} "
+            f"LOAD: Finished SQL bulk COPY of {total_records} records in {total_batches} "
             f"in-memory CSV batches to Postgres {temp_table} table"
         )
 
