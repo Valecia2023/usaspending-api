@@ -24,10 +24,12 @@ import pandas as pd
 
 from contextlib import closing
 from io import StringIO
-from typing import Iterable, List
+from typing import Iterable, List, Dict, Union
 
 from botocore.client import BaseClient
 from pandas.io.sql import SQLTable
+from pyspark.sql.types import StructField
+from pyspark.pandas._typing import Dtype
 from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.engine import Connection
@@ -227,6 +229,7 @@ def copy_data_as_csv_to_pg(
 
 def copy_pandas_dfs_as_csv_to_pg(
     pandas_dfs: Iterable[pd.DataFrame],
+    data_type_mapping: Dict[str, Dict[str, Union[StructField, Dtype]]],
     db_dsn: str,
     target_pg_table: str,
 ):
@@ -245,6 +248,11 @@ def copy_pandas_dfs_as_csv_to_pg(
         try:
             with pd.option_context("display.max_rows", None):
                 logger.info(f"{partition_prefix}Got Pandas DataFrame with {len(pdf)} rows and dtypes = {pdf.dtypes}")
+                logger.info(f"{partition_prefix}Casting Pandas DataFrame with these types derived from source Spark DataFrame: {data_type_mapping}")
+                pandas_types = {k: v["pandas_type"] for k, v in data_type_mapping.items()}
+                pdf = pdf.astype(pandas_types)
+                logger.info(f"{partition_prefix}Casted Pandas DataFrame now has these dtypes: {pdf.dtypes}")
+
             rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, engine=sqlalchemy_connection, method="copy")
             # Yield new Pandas DF holding rowcount for this batch COPY
             yield pd.DataFrame(data={"rowcount": rowcount}, index=[0])

@@ -11,10 +11,15 @@ from django.db.models import Model
 from math import ceil
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import sum as pyspark_sum
+from pyspark.sql.types import StructType
 from typing import Dict, Optional, List
 from datetime import datetime
 
-from usaspending_api.common.csv_stream_s3_to_pg import copy_csvs_from_s3_to_pg, copy_data_as_csv_to_pg, copy_pandas_dfs_as_csv_to_pg
+from usaspending_api.common.csv_stream_s3_to_pg import (
+    copy_csvs_from_s3_to_pg,
+    copy_data_as_csv_to_pg,
+    copy_pandas_dfs_as_csv_to_pg,
+)
 from usaspending_api.common.etl.spark import convert_array_cols_to_string
 from usaspending_api.common.helpers.sql_helpers import get_database_dsn_string
 from usaspending_api.common.helpers.spark_helpers import (
@@ -290,6 +295,8 @@ class Command(BaseCommand):
         if column_names:
             df = df.select(column_names)
 
+        delta_table_fields = df.schema.fields
+
         # If we're working off an existing table, truncate before loading in all the data
         if not make_new_table:
             with db.connection.cursor() as cursor:
@@ -346,7 +353,8 @@ class Command(BaseCommand):
                     spark=spark,
                     df=df,
                     temp_table=temp_table,
-                    ordered_col_names=column_names,
+                    delta_table_fields=delta_table_fields,
+                    # ordered_col_names=column_names,
                 )
         except Exception as exc:
             if postgres_seq_last_value:
@@ -393,6 +401,7 @@ class Command(BaseCommand):
         spark: SparkSession,
         df: DataFrame,
         temp_table: str,
+        delta_table_fields: StructType,
         ordered_col_names: List[str],
     ):
         """
@@ -453,16 +462,29 @@ class Command(BaseCommand):
         # total_records = sum(batch_rowcounts)
         # total_batches = len(batch_rowcounts)
 
+        from pyspark.pandas.typedef import spark_type_to_pandas_dtype
+
+        data_type_mapping = {
+            f.name: {"spark_type": f.dataType, "pandas_type": spark_type_to_pandas_dtype(f.dataType)}
+            for f in delta_table_fields
+        }
+
         spark.sql(f"SET spark.sql.execution.arrow.maxRecordsPerBatch = {CONFIG.SPARK_PARTITION_ROWS}")
         from pyspark.sql.types import StructType, StructField, LongType
+
         output_schema = StructType([StructField(name="rowcount", dataType=LongType(), nullable=False)])
-        rowcounts_df = df.mapInPandas(lambda pandas_dfs: copy_pandas_dfs_as_csv_to_pg(
-            pandas_dfs=pandas_dfs,
-            db_dsn=db_dsn,
-            target_pg_table=temp_table,
-        ), schema=output_schema)
+        rowcounts_df = df.mapInPandas(
+            lambda pandas_dfs: copy_pandas_dfs_as_csv_to_pg(
+                pandas_dfs=pandas_dfs,
+                data_type_mapping=data_type_mapping,
+                db_dsn=db_dsn,
+                target_pg_table=temp_table,
+            ),
+            schema=output_schema,
+        )
 
         from pyspark.sql.functions import count
+
         # NOTE: Only interact with the results pyspark DataFrame once. Invoking an action runs the DB inserts within
         # the mapped function. They will not insert until the DF is acted upon (here)
         total_batches, total_records = tuple(
