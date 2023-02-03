@@ -460,7 +460,7 @@ class Command(BaseCommand):
             db_dsn=db_dsn,
             target_pg_table=temp_table,
         ), schema=output_schema)
-
+        self.logger.info(f"Results = {rowcounts_pandas_df}")
         print(rowcounts_pandas_df)
         # total_records = rowcounts_pandas_df["rowcount"].sum()
         # total_batches = len(rowcounts_pandas_df)
