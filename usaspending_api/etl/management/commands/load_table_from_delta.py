@@ -11,7 +11,7 @@ from django.db.models import Model
 from math import ceil
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import sum as pyspark_sum
-from pyspark.sql.types import StructType
+from pyspark.sql.types import StructField
 from typing import Dict, Optional, List
 from datetime import datetime
 
@@ -354,7 +354,7 @@ class Command(BaseCommand):
                     df=df,
                     temp_table=temp_table,
                     delta_table_fields=delta_table_fields,
-                    # ordered_col_names=column_names,
+                    ordered_col_names=column_names,
                 )
         except Exception as exc:
             if postgres_seq_last_value:
@@ -401,7 +401,7 @@ class Command(BaseCommand):
         spark: SparkSession,
         df: DataFrame,
         temp_table: str,
-        delta_table_fields: StructType,
+        delta_table_fields: List[StructField],
         ordered_col_names: List[str],
     ):
         """
