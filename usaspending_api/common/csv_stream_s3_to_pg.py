@@ -16,13 +16,18 @@ import boto3
 import time
 import psycopg2
 import codecs
+import csv
 import gzip
 import logging
 
+import pandas as pd
+
 from contextlib import closing
+from io import StringIO
 from typing import Iterable, List
 
 from botocore.client import BaseClient
+from pandas.io.sql import SQLTable
 
 from usaspending_api.common.logging import AbbrevNamespaceUTCFormatter, ensure_logging
 from usaspending_api.config import CONFIG
@@ -180,3 +185,86 @@ def copy_csvs_from_s3_to_pg(
         logger.error(f"{partition_prefix}ERROR writing batch/partition number {batch_num}")
         logger.exception(exc_batch)
         raise exc_batch
+
+
+def copy_data_as_csv_to_pg(
+    partition_idx: int,
+    partition_data: Iterable[str],
+    db_dsn: str,
+    target_pg_table: str,
+):
+    """Process a partition of data records, converting them to in-memory CSV format and using SQL COPY to
+    insert them into Postgres. Instantiate the psycopg2 DB connection only once per partition.
+    """
+    ensure_logging(logging_config_dict=LOGGING, formatter_class=AbbrevNamespaceUTCFormatter, logger_to_use=logger)
+    # Consume Iterator (generator) by Pandas DataFrame WITHOUT iterating it (into memory) yet
+    pdf = pd.DataFrame(partition_data)
+    batch_start = time.time()
+    partition_prefix = f"Partition#{partition_idx}: "
+    logger.info(f"{partition_prefix}Starting write of a batch on partition {partition_idx}")
+    try:
+        with psycopg2.connect(dsn=db_dsn) as connection:
+            connection.autocommit = True
+            rowcount = insert_pandas_dataframe(df=pdf, table=target_pg_table, dbapi_conn=connection, method="copy")
+            batch_elapsed = time.time() - batch_start
+            logger.info(
+                f"{partition_prefix}Finished writing batch of {rowcount} CSV-formatted records"
+                f"on partition {partition_idx} in {batch_elapsed:.3f}s"
+            )
+    except Exception as exc_batch:
+        logger.error(f"{partition_prefix}ERROR writing batch/partition number {partition_idx}")
+        logger.exception(exc_batch)
+        raise exc_batch
+    return [rowcount]
+
+
+def insert_pandas_dataframe(df: pd.DataFrame, table: str, dbapi_conn, method=None):
+    """Inserts a dataframe to the specified database table.
+
+    Args:
+        df (pd.DataFrame): data to insert
+        table (str): name of table to insert to
+        dbapi_conn (psycopg2 Connection): db connection
+        method: one of 'multi' or 'copy', if not None
+            - 'multi': does a multi-value bulk insert (many value rows at once). It is efficient for analytics
+                databases with few columns, and esp. if columnar storage, but not as efficient for
+                row-oriented DBs, and slows considerably when many columns
+            - 'copy': use database COPY command, and load from CSV in-memory string buffer
+    """
+    if method == "copy":
+        method = _insert_pandas_dataframe_using_copy
+    rowcount = df.to_sql(name=table, con=dbapi_conn, index=False, if_exists="append", method=method)
+    if rowcount:  # returns may not be supported til Pandas 1.4.x+
+        return rowcount
+    return len(df.index)
+
+
+def _insert_pandas_dataframe_using_copy(table: SQLTable, dbapi_conn, fields: List[str], data: Iterable[Iterable]):
+    """Callable concrete impl of the pandas.DataFrame.to_sql method parameter, which allows the given
+    DataFrame's data to be buffered in-memory as a string in CSV format, and then loaded into the
+    database via the given connection using COPY <table> (<cols>) FROM STDIN WITH CSV.
+
+    Fastest way to get DataFrame data into a DB table.
+
+    Args:
+        table (pandas.io.sql.SQLTable): name of existing table to bulk insert into via COPY
+        dbapi_conn (psycopg2 Connection): db connection
+        fields (List[str]): column names
+        data (Iterable[Iterable]): iterable data set, where each item is a collection of values for a data row
+    """
+    # US DB API connection that can provide a cursor
+    with dbapi_conn.cursor() as cursor:
+        string_buffer = StringIO()
+        writer = csv.writer(string_buffer)
+        writer.writerows(data)
+        string_buffer.seek(0)
+
+        columns = ", ".join(f'"{f}"' for f in fields)
+        if table.schema:
+            table_name = f"{table.schema}.{table.name}"
+        else:
+            table_name = table.name
+
+        sql = f"COPY {table_name} ({columns}) FROM STDIN WITH CSV"
+        cursor.copy_expert(sql=sql, file=string_buffer)
+        return cursor.rowcount

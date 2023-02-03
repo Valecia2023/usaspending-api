@@ -13,7 +13,7 @@ from pyspark.sql import SparkSession, DataFrame
 from typing import Dict, Optional, List
 from datetime import datetime
 
-from usaspending_api.common.csv_stream_s3_to_pg import copy_csvs_from_s3_to_pg
+from usaspending_api.common.csv_stream_s3_to_pg import copy_csvs_from_s3_to_pg, copy_data_as_csv_to_pg
 from usaspending_api.common.etl.spark import convert_array_cols_to_string
 from usaspending_api.common.helpers.sql_helpers import get_database_dsn_string
 from usaspending_api.common.helpers.spark_helpers import (
@@ -80,8 +80,17 @@ class Command(BaseCommand):
             "--jdbc-inserts",
             action="store_true",
             help="If present, use DataFrame.write.jdbc(...) to write the Delta-table-wrapping DataFrame "
-            "directly to the Postgres table using JDBC INSERT statements. Otherwise, the faster strategy using "
-            "SQL bulk COPY command will be used, with the Delta table transformed to CSV files first.",
+            "directly to the Postgres table using JDBC INSERT statements. Otherwise, use the faster strategy of "
+            "converting DataFrame partitions to pandas DataFrames and use pandas.to_sql with a custom "
+            "method to do SQL Bulk COPY of in-memory CSV (i.e. buffers CSV 'file' data in memory). ",
+        )
+        parser.add_argument(
+            "--use-csv-files",
+            action="store_true",
+            help="If present, SQL bulk COPY command will be used, with the Delta table transformed to CSV files first. "
+            "Otherwise, use the faster strategy of converting DataFrame partitions to pandas DataFrames and use "
+            "pandas.to_sql with a custom method to do SQL Bulk COPY of in-memory CSV (i.e. buffers CSV 'file' "
+            "data in memory).",
         )
         parser.add_argument(
             "--recreate",
@@ -92,11 +101,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--keep-csv-files",
             action="store_true",
-            help="Only valid/used when --jdbc-inserts is not provided. Whether to prevent overwriting of the temporary "
-            "CSV files by a subsequent write to the same output path. This will instead put them in a "
-            "timestamped sub-folder of that output path (which must not already exist or an error will be "
-            "thrown). Defaults to False. If setting to True, be mindful of cleaning up these preserved files on "
-            "occasion.",
+            help="Only valid/used when --jdbc-inserts is not provided and --use-csv-files is. Whether to prevent "
+            "overwriting of the temporary CSV files by a subsequent write to the same output path. This will instead "
+            "put them in a timestamped sub-folder of that output path (which must not already exist or an error "
+            "will be thrown). Defaults to False. If setting to True, be mindful of cleaning up these preserved "
+            "files on occasion.",
         )
         parser.add_argument(
             "--spark-s3-bucket",
@@ -112,7 +121,8 @@ class Command(BaseCommand):
             "If the job fails for some unexpected reason then the sequence will be reset to the previous value.",
         )
 
-    def _split_dfs(self, df, special_columns):
+    @staticmethod
+    def _split_dfs(df, special_columns):
         """Split a DataFrame into DataFrame subsets based on presence of NULL values in certain special columns
 
         Unfortunately, pySpark with the JDBC doesn't handle UUIDs/JSON well.
@@ -295,23 +305,20 @@ class Command(BaseCommand):
 
         # Write to Postgres
         use_jdbc_inserts = options["jdbc_inserts"]
-        strategy = "JDBC INSERTs" if use_jdbc_inserts else "SQL bulk COPY CSV"
+        use_csv_files = options["use_csv_files"]
+        strategy = (
+            "JDBC INSERTs"
+            if use_jdbc_inserts
+            else "SQL bulk COPY CSV"
+            if use_csv_files
+            else "pandas.DataFrame.to_sql Bulk COPY of in-memory CSV"
+        )
         self.logger.info(
             f"LOAD (START): Loading data from Delta table {delta_table} to {temp_table} using {strategy} " f"strategy"
         )
 
         try:
-            if use_jdbc_inserts:
-                self._write_with_jdbc_inserts(
-                    spark,
-                    df,
-                    temp_table,
-                    split_df_by_special_cols=True,
-                    postgres_model=postgres_model,
-                    postgres_cols=postgres_cols,
-                    overwrite=False,
-                )
-            else:
+            if use_csv_files:
                 if not column_names:
                     raise RuntimeError("column_names None or empty, but are required to map CSV cols to table cols")
                 spark_s3_bucket_name = options["spark_s3_bucket"]
@@ -325,6 +332,17 @@ class Command(BaseCommand):
                     spark_s3_bucket_name=spark_s3_bucket_name,
                     keep_csv_files=True if options["keep_csv_files"] else False,
                 )
+            elif use_jdbc_inserts:
+                self._write_with_jdbc_inserts(
+                    df,
+                    temp_table,
+                    split_df_by_special_cols=True,
+                    postgres_model=postgres_model,
+                    postgres_cols=postgres_cols,
+                    overwrite=False,
+                )
+            else:
+                self._write_with_pandas_sql_bulk_copy_in_mem_csv(df=df, temp_table=temp_table)
         except Exception as exc:
             if postgres_seq_last_value:
                 self.logger.error(
@@ -364,6 +382,61 @@ class Command(BaseCommand):
             last_value = cursor.fetchone()[0]
             cursor.execute(f"ALTER SEQUENCE IF EXISTS {seq_name} RESTART WITH {new_seq_val}")
         return last_value
+
+    def _write_with_pandas_sql_bulk_copy_in_mem_csv(
+        self,
+        df: DataFrame,
+        temp_table: str,
+    ):
+        """
+        Write-from-delta-to-postgres strategy that uses SQL bulk COPY of CSV files to Postgres, but leverages Pandas and
+        in-memory string buffers to hold CSV data in order to propagate DataFrame partition data directly to
+        Postgres. No CSV files are written as intermediary data.
+
+        Args:
+            df (DataFrame): the source data, which will be written to CSV files before COPY to Postgres
+            temp_table (str): the name of the temp table (qualified with schema if needed) in the target Postgres DB
+                where the CSV data will be written to with COPY
+        """
+        df = convert_array_cols_to_string(df, is_postgres_array_format=True, is_for_csv_export=True)
+
+        self.logger.info(f"LOAD: Starting mapping of Delta table partitions to COPY-able in-memory CSV files")
+        df_record_count = df.count()  # safe to doublecheck the count of the *actual* data being processed
+        partitions = ceil(df_record_count / CONFIG.SPARK_PARTITION_ROWS)
+        msg = (
+            f"Repartitioning {df_record_count} records from {df.rdd.getNumPartitions()} partitions into "
+            f"{partitions} partitions to evenly balance no more than "
+            f"{CONFIG.SPARK_PARTITION_ROWS} "
+            f"records per partition. Then handing each partition to available executors for processing."
+        )
+        self.logger.info(msg)
+        self.logger.info(
+            "Partition-processing task logs will be embedded in executor stderr logs, and not appear here."
+        )
+        df = df.repartition(partitions)
+        self.logger.info(f"LOAD: Starting SQL bulk COPY of in-memory CSV data to Postgres {temp_table} table")
+
+        db_dsn = get_database_dsn_string()
+
+        # WARNING: rdd.map needs to use cloudpickle to pickle the mapped function, its arguments, and in-turn any
+        # imported dependencies from either of those two as well as from the module from which the function is
+        # imported. If at any point a new transitive dependency is introduced
+        # into the mapped function, its module, or an arg of it ... that is not pickle-able, this will throw an error.
+        # One way to help is to resolve all arguments to primitive types (int, string) that can be passed
+        # to the mapped function
+        batch_rowcounts = df.rdd.mapPartitionsWithIndex(
+            lambda partition_idx, partition_data: copy_data_as_csv_to_pg(
+                partition_idx=partition_idx,
+                partition_data=partition_data,
+                db_dsn=db_dsn,
+                target_pg_table=temp_table,
+            ),
+        ).collect()
+
+        self.logger.info(
+            f"LOAD: Finished SQL bulk COPY of {sum(batch_rowcounts)} records in {len(batch_rowcounts)} "
+            f"in-memory CSV batches to Postgres {temp_table} table"
+        )
 
     def _write_with_sql_bulk_copy_csv(
         self,
@@ -522,7 +595,6 @@ class Command(BaseCommand):
 
     def _write_with_jdbc_inserts(
         self,
-        spark: SparkSession,
         df: DataFrame,
         temp_table: str,
         split_df_by_special_cols: bool = False,
@@ -542,7 +614,6 @@ class Command(BaseCommand):
         - which means the DB could be processing 20*1000 = 20,000 INSERT statements concurrently
 
         Args:
-            spark (SparkSession): the active SparkSession to work within
             df (DataFrame): the source data, which will be written to CSV files before COPY to Postgres
             temp_table (str): the name of the temp table (qualified with schema if needed) in the target Postgres DB
                 where the CSV data will be written to with COPY
@@ -553,9 +624,9 @@ class Command(BaseCommand):
             postgres_model (Optional[Model]): Django Model object for the target Postgres table
             postgres_cols Optional[Dict[str, str]]): Mapping of target table col names to Postgres data type
             overwrite (bool): Defaults to False. Controls whether the table should be truncated first before
-            INSERTing (if True), or if INSERTs should append on existing data in the table (if False). NOTE: The table
-            may already have been TRUNCATEd as part of the setup of this job before it gets to this step of writing
-            to it.
+                INSERTing (if True), or if INSERTs should append on existing data in the table (if False). NOTE:
+                The table may already have been TRUNCATEd as part of the setup of this job before it gets to this
+                step of writing to it.
         """
         special_columns = {}
         save_mode = "overwrite" if overwrite else "append"
