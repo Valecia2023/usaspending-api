@@ -462,13 +462,13 @@ class Command(BaseCommand):
         ), schema=output_schema)
 
         print(rowcounts_pandas_df)
-        total_records = rowcounts_pandas_df["rowcount"].sum()
-        total_batches = len(rowcounts_pandas_df)
-
-        self.logger.info(
-            f"LOAD: Finished SQL bulk COPY of {total_records} records in {total_batches} "
-            f"in-memory CSV batches to Postgres {temp_table} table"
-        )
+        # total_records = rowcounts_pandas_df["rowcount"].sum()
+        # total_batches = len(rowcounts_pandas_df)
+        #
+        # self.logger.info(
+        #     f"LOAD: Finished SQL bulk COPY of {total_records} records in {total_batches} "
+        #     f"in-memory CSV batches to Postgres {temp_table} table"
+        # )
 
     def _write_with_sql_bulk_copy_csv(
         self,
