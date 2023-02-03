@@ -461,7 +461,7 @@ class Command(BaseCommand):
             db_dsn=db_dsn,
             target_pg_table=temp_table,
         ), schema=output_schema)
-        self.logger.info("Spark DAG created. Now getting results...")
+
         from pyspark.sql.functions import count
         # NOTE: Only interact with the results pyspark DataFrame once. Invoking an action runs the DB inserts within
         # the mapped function. They will not insert until the DF is acted upon (here)
