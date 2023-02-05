@@ -465,7 +465,11 @@ class Command(BaseCommand):
         from pyspark.pandas.typedef import spark_type_to_pandas_dtype
 
         data_type_mapping = {
-            f.name: {"spark_type": f.dataType, "pandas_type": spark_type_to_pandas_dtype(f.dataType)}
+            f.name: {
+                "spark_type": f.dataType,
+                # Extension Dtypes allow use of the Pandas NULL (NaN) supporting wrappers around raw Numpy types
+                "pandas_type": spark_type_to_pandas_dtype(spark_type=f.dataType, use_extension_dtypes=True),
+            }
             for f in delta_table_fields
         }
 
