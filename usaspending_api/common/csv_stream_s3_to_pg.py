@@ -250,7 +250,7 @@ def copy_pandas_dfs_as_csv_to_pg(
             with pd.option_context("display.max_rows", None):
                 logger.info(f"{partition_prefix}Got Pandas DataFrame with {len(pdf)} rows and dtypes = {pdf.dtypes}")
                 logger.info(f"{partition_prefix}Casting Pandas DataFrame with these types derived from source Spark DataFrame: {data_type_mapping}")
-                pdf = pdf.replace(np.nan, None)  # NaN values can't be type-cast
+                # pdf = pdf.replace(np.nan, None)  # NaN values can't be type-cast
                 pandas_types = {k: v["pandas_type"] for k, v in data_type_mapping.items()}
                 pdf = pdf.astype(pandas_types)
                 logger.info(f"{partition_prefix}Casted Pandas DataFrame now has these dtypes: {pdf.dtypes}")
