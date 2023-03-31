@@ -52,6 +52,7 @@ def _get_boto3_s3_client() -> BaseClient:
     return s3_client
 
 
+# TODO: ought to rename this function if it is no longer streaming. e.g. _download_and_copy
 def _stream_and_copy(
     configured_logger: logging.Logger,
     cursor: psycopg2._psycopg.cursor,
@@ -66,22 +67,19 @@ def _stream_and_copy(
     start = time.time()
     configured_logger.info(f"{partition_prefix}Starting write of {s3_obj_key}")
     try:
-        s3_obj = s3_client.get_object(Bucket=s3_bucket_name, Key=s3_obj_key)
-        # Getting Body gives a botocore.response.StreamingBody object back to allow "streaming" its contents
-        s3_obj_body = s3_obj["Body"]
-        with closing(s3_obj_body):  # make sure to close the stream when done
-            if gzipped:
-                with gzip.open(s3_obj_body, "rb") as csv_binary:
-                    cursor.copy_expert(
-                        sql=f"COPY {target_pg_table} ({','.join(ordered_col_names)}) FROM STDIN (FORMAT CSV)",
-                        file=csv_binary,
-                    )
-            else:
-                with codecs.getreader("utf-8")(s3_obj_body) as csv_stream_reader:
-                    cursor.copy_expert(
-                        sql=f"COPY {target_pg_table} ({','.join(ordered_col_names)}) FROM STDIN (FORMAT CSV)",
-                        file=csv_stream_reader,
-                    )
+        s3_obj = s3_client.get_object(Bucket=s3_bucket_name, Key=s3_obj_key)["Body"].read()  # type: bytes
+        if gzipped:
+            with gzip.open(s3_obj, "rb") as csv_binary:
+                cursor.copy_expert(
+                    sql=f"COPY {target_pg_table} ({','.join(ordered_col_names)}) FROM STDIN (FORMAT CSV)",
+                    file=csv_binary,
+                )
+        else:
+            with codecs.getreader("utf-8")(s3_obj) as csv_reader:
+                cursor.copy_expert(
+                    sql=f"COPY {target_pg_table} ({','.join(ordered_col_names)}) FROM STDIN (FORMAT CSV)",
+                    file=csv_reader,
+                )
         elapsed = time.time() - start
         rows_copied = cursor.rowcount
         configured_logger.info(
