@@ -559,7 +559,22 @@ transaction_search_load_sql_string = fr"""
             WHEN (
                 COALESCE(transaction_fpds.legal_entity_country_code, transaction_fabs.legal_entity_country_code) <> 'USA'
             ) THEN NULL
-            ELSE COALESCE(rl_cd_state_grouped.congressional_district_no, rl_zips.congressional_district_no, rl_cd_zips_grouped.congressional_district_no, rl_cd_city_grouped.congressional_district_no, rl_cd_county_grouped.congressional_district_no)
+            WHEN (
+                rl_cd_state_grouped.congressional_district_no IS NOT NULL
+            ) THEN rl_cd_state_grouped.congressional_district_no
+            WHEN (
+                rl_zips.congressional_district_no IS NOT NULL
+            ) THEN rl_zips.congressional_district_no
+            WHEN (
+                rl_cd_zips_grouped.congressional_district_no IS NOT NULL
+            ) THEN rl_cd_zips_grouped.congressional_district_no
+            WHEN (
+                rl_cd_city_grouped.congressional_district_no IS NOT NULL
+            ) THEN CONCAT('city: ', rl_cd_city_grouped.congressional_district_no)
+            WHEN (
+                rl_cd_county_grouped.congressional_district_no IS NOT NULL
+            ) THEN CONCAT('county: ', rl_cd_county_grouped.congressional_district_no)
+            ELSE NULL
         END) AS recipient_location_congressional_code_current,
         COALESCE(transaction_fpds.legal_entity_zip5, transaction_fabs.legal_entity_zip5)
             AS recipient_location_zip5,
@@ -623,12 +638,12 @@ transaction_search_load_sql_string = fr"""
                 (transaction_fabs.place_of_performance_scope = 'City-wide'
                 OR transaction_fpds.place_of_perform_country_c = 'USA')
                 AND pop_cd_city_grouped.congressional_district_no IS NOT NULL
-            ) THEN pop_cd_city_grouped.congressional_district_no
+            ) THEN CONCAT('city: ', pop_cd_city_grouped.congressional_district_no)
             WHEN (
                 (transaction_fabs.place_of_performance_scope = 'County-wide'
                 OR transaction_fpds.place_of_perform_country_c = 'USA')
                 AND pop_cd_county_grouped.congressional_district_no IS NOT NULL
-            ) THEN pop_cd_county_grouped.congressional_district_no
+              ) THEN CONCAT('county: ', pop_cd_county_grouped.congressional_district_no)
             ELSE NULL
         END) AS pop_congressional_code_current,
         COALESCE(transaction_fpds.place_of_performance_zip5, transaction_fabs.place_of_performance_zip5)
