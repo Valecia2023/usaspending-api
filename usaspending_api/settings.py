@@ -73,7 +73,7 @@ CSV_LOCAL_PATH = str(REPO_DIR / "csv_downloads") + "/"
 DOWNLOAD_ENV = ""
 BULK_DOWNLOAD_LOCAL_PATH = str(REPO_DIR / "bulk_downloads") + "/"
 
-BULK_DOWNLOAD_S3_BUCKET_NAME = ""
+BULK_DOWNLOAD_S3_BUCKET_NAME = "dti-usaspending-bulk-download-qat"
 BULK_DOWNLOAD_S3_REDIRECT_DIR = "generated_downloads"
 BULK_DOWNLOAD_SQS_QUEUE_NAME = ""
 MONTHLY_DOWNLOAD_S3_BUCKET_NAME = ""
