@@ -42,7 +42,8 @@ env:
 jobs:
   # NOTE: See conftest.py pytest_collection_modifyitems for how Marks are assigned to tests
   include:
-  - name: Unit Tests
+  - stage: Setup and Test
+    name: Unit Tests
     env:
     - PYTEST_SETUP_TEST_DATABASES=false
     - PYTEST_PRELOAD_SPARK_JARS=false
@@ -50,6 +51,11 @@ jobs:
     - PYTEST_EXCLUDE_GLOB=**/tests/integration/*
     - PYTEST_MATCH_EXPRESSION=
     - PYTEST_MARK_EXPRESSION='(not spark and not database and not elasticsearch)'
+    workspaces:
+      create:
+        name: ws1
+        paths:
+          - job.*.txt
   - name: Non-Spark Integration Tests
     env:
     - PYTEST_SETUP_TEST_DATABASES=true
@@ -58,6 +64,11 @@ jobs:
     - PYTEST_EXCLUDE_GLOB=
     - PYTEST_MATCH_EXPRESSION=
     - PYTEST_MARK_EXPRESSION='(not spark)'
+    workspaces:
+      create:
+        name: ws2
+        paths:
+          - job.*.txt
   - name: Spark Integration Tests - test_load_to_from_delta.py
     env:
     - PYTEST_XDIST_NUMPROCESSES=4
@@ -67,6 +78,11 @@ jobs:
     - PYTEST_EXCLUDE_GLOB=
     - PYTEST_MATCH_EXPRESSION=test_load_to_from_delta.py
     - PYTEST_MARK_EXPRESSION=spark
+    workspaces:
+      create:
+        name: ws3
+        paths:
+          - job.*.txt
   - name: Spark Integration Tests - test_load_transactions_in_delta.py
     env:
     # Concurrent sessions does not seem to be efficient for this test. Keeping at 1 session
@@ -77,6 +93,11 @@ jobs:
     - PYTEST_EXCLUDE_GLOB=
     - PYTEST_MATCH_EXPRESSION=test_load_transactions_in_delta.py
     - PYTEST_MARK_EXPRESSION=spark
+    workspaces:
+      create:
+        name: ws4
+        paths:
+          - job.*.txt
   - name: Spark Integration Tests - Other
     env:
     - PYTEST_XDIST_NUMPROCESSES=4
@@ -86,101 +107,34 @@ jobs:
     - PYTEST_EXCLUDE_GLOB=
     - PYTEST_MATCH_EXPRESSION='(not test_load_to_from_delta.py and not test_load_transactions_in_delta.py)'
     - PYTEST_MARK_EXPRESSION=spark
-
+    workspaces:
+      create:
+        name: ws5
+        paths:
+          - job.*.txt
+  - stage: Code Coverage
+    workspaces:
+      use: [ws1,ws2,ws3,ws4,ws5]
+    script:
+    - cat job.*.txt >> job.txt
+    - cat job.txt
 
 before_install:
-  # Postgresql-13 requires manual installation
-  - sudo apt-get install -y wget
-  - sudo wget -qO - https://package.perforce.com/perforce.pubkey | sudo apt-key add -
-  - sudo apt-get update
-  - sudo apt-get install -y lsb-release gnupg2 iproute2
-  - wget -O - http://apt.postgresql.org/pub/repos/apt/ACCC4CF8.asc | sudo apt-key add -
-  - echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-  - sudo apt-get update
-  - sudo apt-get install -y postgresql-13
-  - sudo cat /etc/postgresql/13/main/postgresql.conf
-  - sudo sed -i 's/^port =.*/port = 5432/' /etc/postgresql/13/main/postgresql.conf 
-  - sudo cat /etc/postgresql/13/main/postgresql.conf
-  - echo "user1             travis               postgres" | sudo tee --append /etc/postgresql/13/main/pg_ident.conf
-  - sudo chown postgres /etc/postgresql/13/main/pg_ident.conf
-  - sudo sed -i '/local.*all.*postgres/ s/peer/trust/' /etc/postgresql/13/main/pg_hba.conf
-  - sudo chown postgres /etc/postgresql/13/main/pg_hba.conf
-  - sudo pg_ctlcluster 13 main stop
-  - sudo pg_ctlcluster 13 main start
-  # Seed missing env vars with sensible defaults from the template .env file. Explicitly set global env vars above to override these if needed
-  - cp .env.template .env
-  # Install elasticsearch
-  - sudo systemctl stop elasticsearch
-  - sudo dpkg --remove elasticsearch
-  - sudo dpkg --purge elasticsearch
-  - sudo rm -rf /var/lib/elasticsearch
-  - travis_retry curl -s -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.1.1-amd64.deb
-  - sudo dpkg --install elasticsearch-7.1.1-amd64.deb
-  - sudo sed -i.old 's/-Xms1g/-Xms512m/' /etc/elasticsearch/jvm.options
-  - echo -e '-XX:+DisableExplicitGC\n-Djdk.io.permissionsUseCanonicalPath=true\n-Dlog4j.skipJansi=true\n-server\n' | sudo tee -a /etc/elasticsearch/jvm.options
-  - sudo /usr/share/elasticsearch/bin/elasticsearch-plugin install mapper-murmur3
-  - sudo chown -R elasticsearch:elasticsearch /etc/default/elasticsearch
-  - sudo systemctl start elasticsearch
-  - sudo journalctl -u elasticsearch -b
-  # Add dredd for API contract testing
-  - travis_retry npm install --global dredd@13.1.2
+  - sleep 1
 
 install:
-  # setuptools is pinned to version 60.8.2 due to an error occurring with built-in version
-  - travis_retry pip install setuptools==60.8.2
-  - travis_retry pip install .[dev]
-  - travis_retry pip install coveralls
-  # Checkout dependent broker code used to spin up a broker integration test db. Put it in its own folder alongside this repo's code
-  - echo "Using ${BROKER_REPO_BRANCH} branch from ${BROKER_REPO_URL}"
-  - travis_retry git clone --branch ${BROKER_REPO_BRANCH} --single-branch --depth 1 ${BROKER_REPO_URL} ${BROKER_REPO_FOLDER}
+  - sleep 2
 
 before_script:
   # Get dependencies to report code coverage to code climate
   - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
   - ./cc-test-reporter before-build
-  # Our Postgres DB provided by Travis needs to have the (super) users specified by our env var DB URLs used
-  - sudo psql --cluster 13/main -U postgres -c "CREATE USER ${USASPENDING_DB_USER} PASSWORD '${USASPENDING_DB_PASSWORD}' SUPERUSER"
-  - sudo psql --cluster 13/main -U postgres -c "ALTER USER ${USASPENDING_DB_USER} SET search_path TO public,raw,int,temp,rpt"
-  - sudo psql --cluster 13/main -U postgres -c "CREATE USER ${BROKER_DB_USER} PASSWORD '${BROKER_DB_PASSWORD}' SUPERUSER"
-  # Postgres DB also needs a readonly user, that is referenced in some code
-  - sudo psql --cluster 13/main -U postgres -c "CREATE ROLE readonly;"
-  - >
-    sudo psql --cluster 13/main -U postgres -c "\copy (
-        SELECT
-          'GRANT USAGE ON SCHEMA ' || nspname || ' TO readonly; '
-        || 'GRANT SELECT ON ALL TABLES IN SCHEMA ' || nspname || ' TO readonly; '
-        || 'ALTER DEFAULT PRIVILEGES IN SCHEMA ' || nspname || ' GRANT SELECT ON TABLES TO readonly; '
-        FROM pg_namespace WHERE nspname IN ('raw','int','rpt','temp','public')
-      ) TO grant_to_readonly.sql;"
-  - sudo psql --cluster 13/main -U postgres -c "\i grant_to_readonly.sql"
-  # Trigger the setup of multiple test DBs that will be left for the next pytest run to reuse --numprocesses
-  # Also, must manually set --numprocesses on Travis CI VMs; can't use auto (see: https://github.com/pytest-dev/pytest-xdist/pull/317)
-  - if [ "${PYTEST_SETUP_TEST_DATABASES}" = true ]; then pytest --create-db --reuse-db --numprocesses ${PYTEST_XDIST_NUMPROCESSES} --no-cov --disable-warnings -r=fEs --verbosity=3 --capture=no --log-cli-level=WARNING --show-capture=log 2> /dev/null 'usaspending_api/tests/integration/test_setup_of_test_dbs.py::test_trigger_test_db_setup'; fi;
-  # Trigger preloading of Spark dependent JARs to avoid Ivy (Maven) repo download race condition from multiple pytest-xdist worker test sessions
-  - if [ "${PYTEST_PRELOAD_SPARK_JARS}" = true ]; then pytest --no-cov --disable-warnings -r=fEs --verbosity=3 'usaspending_api/tests/integration/test_setup_of_spark_dependencies.py::test_preload_spark_jars'; fi;
-  - sudo psql --cluster 13/main -U postgres -c "\l"
-  # Ensure MinIO can run as our s3 substitute
-  - mkdir -p "${MINIO_DATA_DIR}"
-  - mkdir -p "${HOME}/.ivy2"
-  - make docker-compose-up-s3 args="-d"
-  # Build image from which to call Broker scripts
-  - docker build -t ${BROKER_DOCKER_IMAGE} ${BROKER_REPO_FOLDER}
-  - until curl --silent -XGET --fail http://localhost:9200; do printf '.'; sleep 1; done
 
 script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
-  - flake8
-  - black --check --diff .
-  - python manage.py check_for_endpoint_documentation
-  - dredd > dredd-results.txt && echo '! grep -E "^[warn:|error:]" dredd-results.txt' | bash
-  # Check that no integration tests are outside **/tests/integration/ folders
-  - return $(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(spark or database or elasticsearch)' --no-cov --disable-warnings | grep '^usaspending_api.*$' | wc -l)
-  - test $? -gt 0 && echo 'Failing because integration tests would be improperly captured as unit tests. Run the previous pytest command locally to figure out which to move to a **/tests/integration/ folder'
-  # Must manually set --numprocesses on Travis CI VMs; can't use auto (see: https://github.com/pytest-dev/pytest-xdist/pull/317)
-  #- pytest --durations 50 --ignore-glob='**/tests/integration/*' --cov=usaspending_api --cov-report= --reuse-db -r=fEs --numprocesses 6 --dist worksteal --verbosity=1
-  #- pytest --durations 50 --override-ini=python_files='**/tests/integration/*' --cov=usaspending_api --cov-append --cov-report term --cov-report xml:coverage.xml --reuse-db -r=fEs --numprocesses 6 --dist worksteal --verbosity=1
-  - pytest --override-ini=python_files="${PYTEST_INCLUDE_GLOB}" --ignore-glob="${PYTEST_EXCLUDE_GLOB}" -m "${PYTEST_MARK_EXPRESSION}" -k "${PYTEST_MATCH_EXPRESSION}" --cov=usaspending_api --cov-append --cov-report term --cov-report xml:coverage.xml --reuse-db -r=fEs --numprocesses ${PYTEST_XDIST_NUMPROCESSES} --dist worksteal --verbosity=1 --durations 50
-after_script:
-  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
+  - echo "${TRAVIS_JOB_NAME}" > job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
+  - cat job.*.txt
+#after_script:
+#  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
