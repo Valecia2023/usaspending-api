@@ -129,12 +129,16 @@ before_install:
   - sleep 1
 
 install:
-  - pip install pytest==7.4.* pytest-cov==4.1.*
+  #- pip install pytest==7.4.* pytest-cov==4.1.*
+  # setuptools is pinned to version 60.8.2 due to an error occurring with built-in version
+  - travis_retry pip install setuptools==60.8.2
+  - travis_retry pip install .[dev]
+  - travis_retry pip install coveralls
 
 before_script:
   # Log job details to be captured in workspace for this job, and used by code coverage stage
   - echo -n "$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2)|${TRAVIS_JOB_NAME}" >> job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
-  - cat job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
+  - cat "job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt"
   # Get dependencies to report code coverage to code climate
   - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
@@ -148,7 +152,7 @@ script:
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
   - echo -n "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
   - ls job.*.txt
-  - cat job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
+  - cat "job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt"
 
 after_script:
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
