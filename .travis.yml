@@ -38,7 +38,7 @@ env:
   - MINIO_HOST=localhost
   - PYTEST_XDIST_NUMPROCESSES=4
   - COLUMNS=240  # for wider terminal output
-  - TRAVIS_JOB_INDEX=$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2)
+  - TRAVIS_JOB_INDEX="$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2)"
 
 jobs:
   include:
@@ -160,7 +160,7 @@ script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
   - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.$TRAVIS_JOB_INDEX.json -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $TRAVIS_JOB_INDEX | tail -n 1 | cut -d':' -f3)"
-  - stat coverage.json
+  - stat coverage.$TRAVIS_JOB_INDEX.json
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
   - echo "|${TRAVIS_TEST_RESULT}" >> job.$TRAVIS_JOB_INDEX.txt
   - ls job.*.txt
