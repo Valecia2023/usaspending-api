@@ -158,7 +158,7 @@ before_script:
 script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
-  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.json -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2) | tail -n 1 | cut -d':' -f3)"
+  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.$(echo "$jf" | cut -d'.' -f2).json -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2) | tail -n 1 | cut -d':' -f3)"
   - stat coverage.json
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
   - echo "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
