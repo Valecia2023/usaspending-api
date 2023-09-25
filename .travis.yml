@@ -130,11 +130,14 @@ jobs:
       - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
       - chmod +x ./cc-test-reporter
     script:
+    - ls jobs*.txt
+    - ls coverage*
     - cat job.*.txt >> jobs.txt
     - cat jobs.txt
-    - for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage -t coverage.py -o ./coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; fi; done
-    - ls ./coverage/
-    - cat ./coverage/codeclimate.*.json
+    - echo for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage --output coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; fi; done
+    - for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage --output coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; fi; done
+    - ls coverage/
+    - cat coverage/codeclimate.*.json
     - ./cc-test-reporter sum-coverage --output - --parts $(cat jobs.txt | wc -l) ./coverage/codeclimate.*.json | ./cc-test-reporter upload-coverage --input -; fi
 
 before_install:
