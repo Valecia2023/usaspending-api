@@ -38,7 +38,7 @@ env:
   - MINIO_HOST=localhost
   - PYTEST_XDIST_NUMPROCESSES=4
   - COLUMNS=240  # for wider terminal output
-  - TRAVIS_JOB_INDEX="$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2)"
+  - TRAVIS_JOB_INDEX="$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2)"
 
 jobs:
   include:
