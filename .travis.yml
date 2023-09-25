@@ -117,10 +117,13 @@ jobs:
     - IS_CODE_COVERAGE_REPORT=true
     workspaces:
       use: [ws1,ws2,ws3,ws4,ws5]
+    before_install: ""  # no-op
+    install: ""  # no-op
+    before_script: ""  # no-op
     script:
     - cat job.*.txt >> jobs.txt
     - cat jobs.txt
-    - for jf in job.*.txt; do if [[ "$(cat jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage -t coverage.py -o ./coverage/codeclimate.$(echo "jf" | cut -d'.' -f2).json ./coverage/spec/.resultset.json; fi; done
+    - for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage -t coverage.py -o ./coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json ./coverage/spec/.resultset.json; fi; done
     - ls ./coverage/
     - cat ./coverage/codeclimate.*.json
     - ./cc-test-reporter sum-coverage --output - --parts $(cat jobs.txt | wc -l) ./coverage/codeclimate.*.json | ./cc-test-reporter upload-coverage --input -; fi
@@ -150,7 +153,7 @@ script:
   - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report xml:coverage.xml -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2) | tail -n 1 | cut -d':' -f3)"
   - stat coverage.xml
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
-  - echo -n "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
+  - echo "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
   - ls job.*.txt
   - cat "job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt"
 
