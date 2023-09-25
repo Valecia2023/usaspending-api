@@ -59,7 +59,7 @@ jobs:
         name: ws1
         paths:
 #          - job.*.txt
-          - coverage.*.json
+          - coverage.*.xml
   - name: Non-Spark Integration Tests
     env:
     - PYTEST_SETUP_TEST_DATABASES=true
@@ -73,7 +73,7 @@ jobs:
         name: ws2
         paths:
 #          - job.*.txt
-          - coverage.*.json
+          - coverage.*.xml
   - name: Spark Integration Tests - test_load_to_from_delta.py
     env:
     - PYTEST_XDIST_NUMPROCESSES=4
@@ -88,7 +88,7 @@ jobs:
         name: ws3
         paths:
 #          - job.*.txt
-          - coverage.*.json
+          - coverage.*.xml
   - name: Spark Integration Tests - test_load_transactions_in_delta.py
     env:
     # Concurrent sessions does not seem to be efficient for this test. Keeping at 1 session
@@ -104,7 +104,7 @@ jobs:
         name: ws4
         paths:
 #          - job.*.txt
-          - coverage.*.json
+          - coverage.*.xml
   - name: Spark Integration Tests - Other
     env:
     - PYTEST_XDIST_NUMPROCESSES=4
@@ -119,7 +119,7 @@ jobs:
         name: ws5
         paths:
 #          - job.*.txt
-          - coverage.*.json
+          - coverage.*.xml
   - stage: Code Coverage
     # NOTE: This stage will only run if ALL test stage jobs passed (there's no point to collect and report coverage if they did not)
     env:
@@ -137,10 +137,10 @@ jobs:
     - ls -lh coverage*
 #    - cat job.*.txt >> jobs.txt
 #    - cat jobs.txt
-    - for cf in coverage.*.json; do ./cc-test-reporter format-coverage --debug --prefix $TRAVIS_BUILD_DIR --input-type coverage.py --output coverage/codeclimate.$(echo "$cf" | cut -d'.' -f2).json coverage.$(echo "$cf" | cut -d'.' -f2).json; done
+    - for cf in coverage.*.xml; do ./cc-test-reporter format-coverage --debug --prefix $TRAVIS_BUILD_DIR --input-type coverage.py --output coverage/codeclimate.$(echo "$cf" | cut -d'.' -f2).xml coverage.$(echo "$cf" | cut -d'.' -f2).xml; done
     - ls coverage/
-    - cat coverage/codeclimate.*.json
-    - ./cc-test-reporter sum-coverage --output - --parts $(find . -maxdepth 1 -name 'coverage.*.json' | wc -l) ./coverage/codeclimate.*.json | ./cc-test-reporter upload-coverage --input -
+    - cat coverage/codeclimate.*.xml
+    - ./cc-test-reporter sum-coverage --output - --parts $(find . -maxdepth 1 -name 'coverage.*.xml' | wc -l) ./coverage/codeclimate.*.xml | ./cc-test-reporter upload-coverage --input -
 
 ####
 #### Below are the default job lifecycle actions if they are not overridden above on a per-job basis
@@ -169,7 +169,7 @@ script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
   - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.$TRAVIS_JOB_INDEX.json --cov-report xml:coverage.$TRAVIS_JOB_INDEX.xml -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $TRAVIS_JOB_INDEX | tail -n 1 | cut -d':' -f3)"
-  - stat coverage.$TRAVIS_JOB_INDEX.json
+  - stat coverage.$TRAVIS_JOB_INDEX.xml
   - head -n 10 coverage.$TRAVIS_JOB_INDEX.xml
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
 #  - echo "|${TRAVIS_TEST_RESULT}" >> job.$TRAVIS_JOB_INDEX.txt
