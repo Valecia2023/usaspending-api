@@ -137,7 +137,7 @@ jobs:
     - ls -lh coverage*
     - cat job.*.txt >> jobs.txt
     - cat jobs.txt
-    - for jf in job.*.txt; do ./cc-test-reporter format-coverage --input-type coverage.py --output coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; done
+    - for jf in job.*.txt; do ./cc-test-reporter format-coverage --debug --input-type coverage.py --output coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; done
     - ls coverage/
     - cat coverage/codeclimate.*.json
     - ./cc-test-reporter sum-coverage --output - --parts $(cat jobs.txt | wc -l) ./coverage/codeclimate.*.json | ./cc-test-reporter upload-coverage --input -
