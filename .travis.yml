@@ -56,6 +56,7 @@ jobs:
         name: ws1
         paths:
           - job.*.txt
+          - coverage.*.json
   - name: Non-Spark Integration Tests
     env:
     - PYTEST_SETUP_TEST_DATABASES=true
@@ -69,6 +70,7 @@ jobs:
         name: ws2
         paths:
           - job.*.txt
+          - coverage.*.json
   - name: Spark Integration Tests - test_load_to_from_delta.py
     env:
     - PYTEST_XDIST_NUMPROCESSES=4
@@ -83,6 +85,7 @@ jobs:
         name: ws3
         paths:
           - job.*.txt
+          - coverage.*.json
   - name: Spark Integration Tests - test_load_transactions_in_delta.py
     env:
     # Concurrent sessions does not seem to be efficient for this test. Keeping at 1 session
@@ -98,6 +101,7 @@ jobs:
         name: ws4
         paths:
           - job.*.txt
+          - coverage.*.json
   - name: Spark Integration Tests - Other
     env:
     - PYTEST_XDIST_NUMPROCESSES=4
@@ -112,6 +116,7 @@ jobs:
         name: ws5
         paths:
           - job.*.txt
+          - coverage.*.json
   - stage: Code Coverage
     env:
     - IS_CODE_COVERAGE_REPORT=true
@@ -126,7 +131,7 @@ jobs:
     script:
     - cat job.*.txt >> jobs.txt
     - cat jobs.txt
-    - for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage -t coverage.py -o ./coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.json; fi; done
+    - for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage -t coverage.py -o ./coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; fi; done
     - ls ./coverage/
     - cat ./coverage/codeclimate.*.json
     - ./cc-test-reporter sum-coverage --output - --parts $(cat jobs.txt | wc -l) ./coverage/codeclimate.*.json | ./cc-test-reporter upload-coverage --input -; fi
