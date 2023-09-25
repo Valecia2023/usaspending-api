@@ -137,7 +137,7 @@ jobs:
     - ls -lh coverage*
 #    - cat job.*.txt >> jobs.txt
 #    - cat jobs.txt
-    - for cf in coverage.*.xml; do ./cc-test-reporter format-coverage --debug --prefix $TRAVIS_BUILD_DIR --input-type coverage.py --output coverage/codeclimate.$(echo "$cf" | cut -d'.' -f2).xml coverage.$(echo "$cf" | cut -d'.' -f2).xml; done
+    - for cf in coverage.*.xml; do ./cc-test-reporter format-coverage --prefix $TRAVIS_BUILD_DIR --input-type coverage.py --output coverage/codeclimate.$(echo "$cf" | cut -d'.' -f2).xml coverage.$(echo "$cf" | cut -d'.' -f2).xml; done
     - ls coverage/
     - cat coverage/codeclimate.*.xml
     - ./cc-test-reporter sum-coverage --output - --parts $(find . -maxdepth 1 -name 'coverage.*.xml' | wc -l) ./coverage/codeclimate.*.xml | ./cc-test-reporter upload-coverage --input -
@@ -168,7 +168,7 @@ before_script:
 script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
-  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.$TRAVIS_JOB_INDEX.json --cov-report xml:coverage.$TRAVIS_JOB_INDEX.xml -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $TRAVIS_JOB_INDEX | tail -n 1 | cut -d':' -f3)"
+  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report xml:coverage.$TRAVIS_JOB_INDEX.xml -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $TRAVIS_JOB_INDEX | tail -n 1 | cut -d':' -f3)"
   - stat coverage.$TRAVIS_JOB_INDEX.xml
   - head -n 10 coverage.$TRAVIS_JOB_INDEX.xml
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
