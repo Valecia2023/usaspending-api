@@ -129,7 +129,7 @@ before_install:
   - sleep 1
 
 install:
-  - sleep 2
+  - pip install pytest==7.4.* pytest-cov==4.1.*
 
 before_script:
   # Log job details to be captured in workspace for this job, and used by code coverage stage
