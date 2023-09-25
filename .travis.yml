@@ -38,6 +38,7 @@ env:
   - MINIO_HOST=localhost
   - PYTEST_XDIST_NUMPROCESSES=4
   - COLUMNS=240  # for wider terminal output
+  - TRAVIS_JOB_INDEX=echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2
 
 jobs:
   include:
@@ -148,8 +149,8 @@ install:
 
 before_script:
   # Log job details to be captured in workspace for this job, and used by code coverage stage
-  - echo -n "$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2)|${TRAVIS_JOB_NAME}" >> job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
-  - cat "job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt"
+  - echo -n "${TRAVIS_JOB_INDEX}|${TRAVIS_JOB_NAME}" >> job.$TRAVIS_JOB_INDEX.txt
+  - cat "job.$TRAVIS_JOB_INDEX.txt"
   # Get dependencies to report code coverage to code climate
   - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
@@ -158,12 +159,12 @@ before_script:
 script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
-  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.$(echo "$jf" | cut -d'.' -f2).json -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2) | tail -n 1 | cut -d':' -f3)"
+  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report json:coverage.$TRAVIS_JOB_INDEX.json -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $TRAVIS_JOB_INDEX | tail -n 1 | cut -d':' -f3)"
   - stat coverage.json
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
-  - echo "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
+  - echo "|${TRAVIS_TEST_RESULT}" >> job.$TRAVIS_JOB_INDEX.txt
   - ls job.*.txt
-  - cat "job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt"
+  - cat "job.$TRAVIS_JOB_INDEX.txt"
 
 after_script:
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
