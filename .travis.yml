@@ -40,9 +40,9 @@ env:
   - COLUMNS=240  # for wider terminal output
 
 jobs:
-  # NOTE: See conftest.py pytest_collection_modifyitems for how Marks are assigned to tests
   include:
   - stage: Setup and Test
+    # NOTE: See conftest.py pytest_collection_modifyitems for how Marks are assigned to tests
     name: Unit Tests
     env:
     - PYTEST_SETUP_TEST_DATABASES=false
@@ -113,11 +113,17 @@ jobs:
         paths:
           - job.*.txt
   - stage: Code Coverage
+    env:
+    - IS_CODE_COVERAGE_REPORT=true
     workspaces:
       use: [ws1,ws2,ws3,ws4,ws5]
     script:
     - cat job.*.txt >> job.txt
-    - cat job.txt
+    - cat jobs.txt
+    - for jf in job.*.txt; do if [[ "$(cat jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage -t coverage.py -o ./coverage/codeclimate.$(echo "jf" | cut -d'.' -f2).json ./coverage/spec/.resultset.json; fi; done
+    - ls ./coverage/
+    - cat ./coverage/codeclimate.*.json
+    - ./cc-test-reporter sum-coverage --output - --parts $(cat jobs.txt | wc -l) ./coverage/codeclimate.*.json | ./cc-test-reporter upload-coverage --input -; fi
 
 before_install:
   - sleep 1
@@ -126,6 +132,9 @@ install:
   - sleep 2
 
 before_script:
+  # Log job details to be captured in workspace for this job, and used by code coverage stage
+  - echo -n "${TRAVIS_JOB_NUMBER}\|${TRAVIS_JOB_NAME}" >> job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
+  - cat job.*.txt
   # Get dependencies to report code coverage to code climate
   - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
@@ -134,7 +143,9 @@ before_script:
 script:
   - stty cols 240  # for wider terminal output
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
-  - echo "${TRAVIS_JOB_NAME}" > job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
+  - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report xml:coverage.xml -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2) | tail -n 1 | cut -d':' -f3)"
+  - cat coverage.xml
+after_script:
+  # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
+  - echo -n "\|${TRAVIS_TEST_RESULT}" >> job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
   - cat job.*.txt
-#after_script:
-#  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
