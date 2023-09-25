@@ -119,7 +119,10 @@ jobs:
       use: [ws1,ws2,ws3,ws4,ws5]
     before_install: ""  # no-op
     install: ""  # no-op
-    before_script: ""  # no-op
+    before_script:
+      # Get dependencies to report code coverage to code climate
+      - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+      - chmod +x ./cc-test-reporter
     script:
     - cat job.*.txt >> jobs.txt
     - cat jobs.txt
