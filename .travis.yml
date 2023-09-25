@@ -133,8 +133,8 @@ install:
 
 before_script:
   # Log job details to be captured in workspace for this job, and used by code coverage stage
-  - echo -n "${TRAVIS_JOB_NUMBER}|${TRAVIS_JOB_NAME}" >> job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
-  - cat job.*.txt
+  - echo -n "$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2)|${TRAVIS_JOB_NAME}" >> job.$(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2).txt
+  - cat job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
   # Get dependencies to report code coverage to code climate
   - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
@@ -145,9 +145,13 @@ script:
   - cd ${TRAVIS_BUILD_DIR}  # run build script out of repo dir
   - pytest --cov=usaspending_api --cov-append --cov-report term --cov-report xml:coverage.xml -k "$(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(not spark and not database and not elasticsearch)' --no-cov --disable-warnings | head -n $(echo $TRAVIS_JOB_NUMBER | cut -d'.' -f2) | tail -n 1 | cut -d':' -f3)"
   - stat coverage.xml
-
-after_script:
   # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
   - echo -n "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
   - ls job.*.txt
-  - cat job.*.txt
+  - cat job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
+
+after_script:
+  # Append build status to logged job details to be captured in workspace for this job, and used by code coverage stage
+#  - echo -n "|${TRAVIS_TEST_RESULT}" >> job.$(echo "$TRAVIS_JOB_NUMBER" | cut -d'.' -f2).txt
+#  - ls job.*.txt
+#  - cat job.*.txt
