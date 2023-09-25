@@ -1,11 +1,13 @@
-language: python
+os: linux
 
 dist: bionic
 
-cache: pip
+language: python
 
 python:
   - '3.7'
+
+cache: pip
 
 env:
   global:
@@ -134,7 +136,7 @@ jobs:
     - ls -lh coverage*
     - cat job.*.txt >> jobs.txt
     - cat jobs.txt
-    - echo for jf in job.*.txt; do echo "if [[ \"$(cat $jf | cut -d'|' -f3)\" == 0 ]]; then ./cc-test-reporter format-coverage --input-type coverage.py --output coverage/codeclimate.$(echo \"$jf\" | cut -d'.' -f2).json coverage.$(echo \"$jf\" | cut -d'.' -f2).json"; fi; done
+    - for jf in job.*.txt; do echo "if [[ \"$(cat $jf | cut -d'|' -f3)\" == 0 ]]; then ./cc-test-reporter format-coverage --input-type coverage.py --output coverage/codeclimate.$(echo \"$jf\" | cut -d'.' -f2).json coverage.$(echo \"$jf\" | cut -d'.' -f2).json"; fi; done
     - for jf in job.*.txt; do if [[ "$(cat $jf | cut -d'|' -f3)" == 0 ]]; then ./cc-test-reporter format-coverage --input-type coverage.py --output coverage/codeclimate.$(echo "$jf" | cut -d'.' -f2).json coverage.$(echo "$jf" | cut -d'.' -f2).json; fi; done
     - ls coverage/
     - cat coverage/codeclimate.*.json
