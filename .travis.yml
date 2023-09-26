@@ -76,6 +76,7 @@ jobs:
     script: ""  # override default to no-op
     before_cache:
       # Save off docker images+layers used by this build into the `docker_images` cache dir
+      - mkdir -p docker_images
       - docker save -o docker_images/images.tar $(docker images --filter reference=${BROKER_DOCKER_IMAGE} --quiet)
   - stage: Static Code Analysis
     name: flake8
