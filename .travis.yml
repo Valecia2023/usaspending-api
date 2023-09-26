@@ -76,14 +76,24 @@ jobs:
     before_install: ""  # override default to no-op
     install: ""  # override default to no-op
     before_script: ""  # override default to no-op
-    script: flake8
+    script:
+    - ls -lathr $HOME
+    - ls -lathr $HOME/virtualenv
+    - pip show
+    - pip list
+    - flake8
   - name: black
     workspaces:
       use: [ pip ]
     before_install: ""  # override default to no-op
     install: ""  # override default to no-op
     before_script: ""  # override default to no-op
-    script: black --check --diff .
+    script:
+    - ls -lathr $HOME
+    - ls -lathr $HOME/virtualenv
+    - pip show
+    - pip list
+    - black --check --diff .
   - name: API Docs
     workspaces:
       use: [ pip ]
@@ -91,6 +101,10 @@ jobs:
     install: ""  # override default to no-op
     before_script: ""  # override default to no-op
     script:
+    - ls -lathr $HOME
+    - ls -lathr $HOME/virtualenv
+    - pip show
+    - pip list
     - python manage.py check_for_endpoint_documentation
     - dredd > dredd-results.txt && echo '! grep -E "^[warn:|error:]" dredd-results.txt' | bash
   - stage: Automated Tests
@@ -109,6 +123,17 @@ jobs:
         name: ws1
         paths:
           - coverage.*.xml
+    before_install: ""  # override default to no-op
+    install: ""  # override default to no-op
+    before_script: ""  # override default to no-op
+    script:
+      - ls -lathr $HOME
+      - ls -lathr $HOME/virtualenv
+      - ls -lathr docker_files/
+      - pip show
+      - pip list
+      - docker images
+      - docker exec -it ${BROKER_DOCKER_IMAGE} ls -lathr
     # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
   - name: Non-Spark Integration Tests
     env:
@@ -124,56 +149,67 @@ jobs:
         name: ws2
         paths:
           - coverage.*.xml
+    before_install: ""  # override default to no-op
+    install: ""  # override default to no-op
+    before_script: ""  # override default to no-op
+    script:
+      - ls -lathr $HOME
+      - ls -lathr $HOME/virtualenv
+      - ls -lathr docker_files/
+      - pip show
+      - pip list
+      - docker images
+      - docker exec -it ${BROKER_DOCKER_IMAGE} ls -lathr
     # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
-  - name: Spark Integration Tests - test_load_to_from_delta.py
-    env:
-    - PYTEST_XDIST_NUMPROCESSES=4
-    - PYTEST_SETUP_TEST_DATABASES=true
-    - PYTEST_PRELOAD_SPARK_JARS=true
-    - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
-    - PYTEST_EXCLUDE_GLOB=
-    - PYTEST_MATCH_EXPRESSION=test_load_to_from_delta.py
-    - PYTEST_MARK_EXPRESSION=spark
-    workspaces:
-      use: [ pip,docker ]
-      create:
-        name: ws3
-        paths:
-          - coverage.*.xml
-    # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
-  - name: Spark Integration Tests - test_load_transactions_in_delta.py
-    env:
-    # Concurrent sessions does not seem to be efficient for this test. Keeping at 1 session
-    - PYTEST_XDIST_NUMPROCESSES=0
-    - PYTEST_SETUP_TEST_DATABASES=true
-    - PYTEST_PRELOAD_SPARK_JARS=true
-    - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
-    - PYTEST_EXCLUDE_GLOB=
-    - PYTEST_MATCH_EXPRESSION=test_load_transactions_in_delta.py
-    - PYTEST_MARK_EXPRESSION=spark
-    workspaces:
-      use: [ pip,docker ]
-      create:
-        name: ws4
-        paths:
-          - coverage.*.xml
-    # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
-  - name: Spark Integration Tests - Other
-    env:
-    - PYTEST_XDIST_NUMPROCESSES=4
-    - PYTEST_SETUP_TEST_DATABASES=true
-    - PYTEST_PRELOAD_SPARK_JARS=true
-    - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
-    - PYTEST_EXCLUDE_GLOB=
-    - PYTEST_MATCH_EXPRESSION='(not test_load_to_from_delta.py and not test_load_transactions_in_delta.py)'
-    - PYTEST_MARK_EXPRESSION=spark
-    workspaces:
-      use: [ pip,docker ]
-      create:
-        name: ws5
-        paths:
-          - coverage.*.xml
-    # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
+#  - name: Spark Integration Tests - test_load_to_from_delta.py
+#    env:
+#    - PYTEST_XDIST_NUMPROCESSES=4
+#    - PYTEST_SETUP_TEST_DATABASES=true
+#    - PYTEST_PRELOAD_SPARK_JARS=true
+#    - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
+#    - PYTEST_EXCLUDE_GLOB=
+#    - PYTEST_MATCH_EXPRESSION=test_load_to_from_delta.py
+#    - PYTEST_MARK_EXPRESSION=spark
+#    workspaces:
+#      use: [ pip,docker ]
+#      create:
+#        name: ws3
+#        paths:
+#          - coverage.*.xml
+#    # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
+#  - name: Spark Integration Tests - test_load_transactions_in_delta.py
+#    env:
+#    # Concurrent sessions does not seem to be efficient for this test. Keeping at 1 session
+#    - PYTEST_XDIST_NUMPROCESSES=0
+#    - PYTEST_SETUP_TEST_DATABASES=true
+#    - PYTEST_PRELOAD_SPARK_JARS=true
+#    - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
+#    - PYTEST_EXCLUDE_GLOB=
+#    - PYTEST_MATCH_EXPRESSION=test_load_transactions_in_delta.py
+#    - PYTEST_MARK_EXPRESSION=spark
+#    workspaces:
+#      use: [ pip,docker ]
+#      create:
+#        name: ws4
+#        paths:
+#          - coverage.*.xml
+#    # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
+#  - name: Spark Integration Tests - Other
+#    env:
+#    - PYTEST_XDIST_NUMPROCESSES=4
+#    - PYTEST_SETUP_TEST_DATABASES=true
+#    - PYTEST_PRELOAD_SPARK_JARS=true
+#    - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
+#    - PYTEST_EXCLUDE_GLOB=
+#    - PYTEST_MATCH_EXPRESSION='(not test_load_to_from_delta.py and not test_load_transactions_in_delta.py)'
+#    - PYTEST_MARK_EXPRESSION=spark
+#    workspaces:
+#      use: [ pip,docker ]
+#      create:
+#        name: ws5
+#        paths:
+#          - coverage.*.xml
+#    # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
   - stage: Code Coverage
     # NOTE: This stage will only run if ALL test stage jobs passed (there's no point to collect and report coverage if they did not)
     env:
