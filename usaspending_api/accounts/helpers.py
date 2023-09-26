@@ -28,9 +28,8 @@ def start_and_end_dates_from_fyq(fiscal_year, fiscal_quarter):
 
     return start_date, end_date
 
+
 def dummy_func():  # breaking to test black and flake8
     print("hello world here")
     x = "str"
-    x.upper() \
-        .replace("A",
-                 "B")
+    x.upper().replace("A", "B")

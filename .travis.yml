@@ -45,7 +45,7 @@ env:
 
 jobs:
   include:
-  - stage: Build - pip dependencies
+  - stage: Build
     name: pip install
     workspaces:
       create:
@@ -60,8 +60,7 @@ jobs:
     - travis_retry pip install coveralls
     before_script: ""  # override default to no-op
     script: ""  # override default to no-op
-  - stage: Build - docker images
-    name: docker build
+  - name: docker build
     workspaces:
       create:
         name: docker
@@ -88,7 +87,6 @@ jobs:
     script:
     - ls -lathr $HOME
     - ls -lathr $HOME/virtualenv
-    - pip show
     - pip list
     - flake8
   - name: black
@@ -100,7 +98,6 @@ jobs:
     script:
     - ls -lathr $HOME
     - ls -lathr $HOME/virtualenv
-    - pip show
     - pip list
     - black --check --diff .
   - name: API Docs
@@ -112,7 +109,6 @@ jobs:
     script:
     - ls -lathr $HOME
     - ls -lathr $HOME/virtualenv
-    - pip show
     - pip list
     - python manage.py check_for_endpoint_documentation
     - dredd > dredd-results.txt && echo '! grep -E "^[warn:|error:]" dredd-results.txt' | bash
@@ -139,7 +135,6 @@ jobs:
       - ls -lathr $HOME
       - ls -lathr $HOME/virtualenv
       - ls -lathr docker_files/
-      - pip show
       - pip list
       - docker images
       - docker exec -it ${BROKER_DOCKER_IMAGE} ls -lathr
