@@ -46,7 +46,7 @@ env:
 jobs:
   include:
   - stage: Build - pip dependencies
-  - name: pip install
+    name: pip install
     workspaces:
       create:
         name: pip
@@ -61,7 +61,7 @@ jobs:
     before_script: ""  # override default to no-op
     script: ""  # override default to no-op
   - stage: Build - docker images
-  - name: docker build
+    name: docker build
     workspaces:
       create:
         name: docker
