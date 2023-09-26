@@ -104,7 +104,7 @@ jobs:
     workspaces:
       use: [ pip ]
     before_install: ""  # override default to no-op
-    install: ""  # override default to no-op
+    install: travis_retry npm install --global dredd@13.1.2  # add dredd for API contract testing
     before_script: ""  # override default to no-op
     script:
     - ls -lathr $HOME
