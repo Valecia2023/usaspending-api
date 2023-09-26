@@ -45,17 +45,22 @@ env:
 
 jobs:
   include:
-  - stage: Build
-    name: pip install
+  - stage: Build - pip dependencies
+  - name: pip install
     workspaces:
       create:
         name: pip
         paths:
           - $HOME/virtualenv/
+          - $TRAVIS_BUILD_DIR/usaspending_api.egg_info/
     before_install: ""  # override default to no-op
-    install: travis_retry pip install .[dev]
+    install:
+    - travis_retry pip install setuptools==60.8.2
+    - travis_retry pip install .[dev]  # TODO: need to also capture usaspending_api.egg_info?
+    - travis_retry pip install coveralls
     before_script: ""  # override default to no-op
     script: ""  # override default to no-op
+  - stage: Build - docker images
   - name: docker build
     workspaces:
       create:
@@ -63,7 +68,11 @@ jobs:
         paths:
           - docker_images/*.tar
     before_install: ""  # override default to no-op
-    install: docker build -t ${BROKER_DOCKER_IMAGE} ${BROKER_REPO_FOLDER}  # build image from which to call Broker scripts
+    install:
+    # Checkout dependent broker code used to spin up a broker integration test db. Put it in its own folder alongside this repo's code
+    - echo "Using ${BROKER_REPO_BRANCH} branch from ${BROKER_REPO_URL}"
+    - travis_retry git clone --branch ${BROKER_REPO_BRANCH} --single-branch --depth 1 ${BROKER_REPO_URL} ${BROKER_REPO_FOLDER}
+    - docker build -t ${BROKER_DOCKER_IMAGE} ${BROKER_REPO_FOLDER}  # build image from which to call Broker scripts
     before_script: ""  # override default to no-op
     script: ""  # override default to no-op
     before_cache:
