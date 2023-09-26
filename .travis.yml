@@ -65,7 +65,7 @@ jobs:
       create:
         name: docker
         paths:
-          - docker_images/*.tar
+          - docker_images/
     before_install: ""  # override default to no-op
     install:
     # Checkout dependent broker code used to spin up a broker integration test db. Put it in its own folder alongside this repo's code
@@ -135,7 +135,7 @@ jobs:
     script:
       - ls -lathr $HOME
       - ls -lathr $HOME/virtualenv
-      - ls -lathr docker_files/
+      - ls -lathr docker_images/
       - pip list
       - docker images
       - docker exec -it ${BROKER_DOCKER_IMAGE} ls -lathr
@@ -160,7 +160,7 @@ jobs:
     script:
       - ls -lathr $HOME
       - ls -lathr $HOME/virtualenv
-      - ls -lathr docker_files/
+      - ls -lathr docker_images/
       - pip show
       - pip list
       - docker images
