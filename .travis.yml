@@ -129,7 +129,6 @@ jobs:
         name: ws1
         paths:
           - coverage.*.xml
-    before_install: ""  # override default to no-op
     install: ""  # override default to no-op
     before_script: ""  # override default to no-op
     script:
@@ -154,7 +153,6 @@ jobs:
         name: ws2
         paths:
           - coverage.*.xml
-    before_install: ""  # override default to no-op
     install: ""  # override default to no-op
     before_script: ""  # override default to no-op
     script:
