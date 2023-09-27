@@ -138,7 +138,7 @@ jobs:
     # Inherits "global" job phases defined below (e.g. before_install, install, before_script, script, etc.)
   - name: Spark Integration Tests - test_load_to_from_delta.py
     env:
-    - PYTEST_XDIST_NUMPROCESSES=4
+    - PYTEST_XDIST_NUMPROCESSES=2
     - PYTEST_SETUP_TEST_DATABASES=true
     - PYTEST_PRELOAD_SPARK_JARS=true
     - PYTEST_INCLUDE_GLOB='test_*.py *_test.py'
@@ -261,4 +261,4 @@ script:
   - return $(pytest --collect-only --quiet --ignore-glob='**/tests/integration/*' -m '(spark or database or elasticsearch)' --no-cov --disable-warnings | grep '^usaspending_api.*$' | wc -l)
   - test $? -gt 0 && echo 'Failing because integration tests would be improperly captured as unit tests. Run the previous pytest command locally to figure out which to move to a **/tests/integration/ folder'
   # Must manually set --numprocesses on Travis CI VMs; can't use auto (see: https://github.com/pytest-dev/pytest-xdist/pull/317)
-  - travis_wait 25 pytest --override-ini=python_files="${PYTEST_INCLUDE_GLOB}" --ignore-glob="${PYTEST_EXCLUDE_GLOB}" -m "${PYTEST_MARK_EXPRESSION}" -k "${PYTEST_MATCH_EXPRESSION}" --cov=usaspending_api --cov-report term --cov-report xml:coverage.$TRAVIS_JOB_INDEX.xml --reuse-db -r=fEs --numprocesses ${PYTEST_XDIST_NUMPROCESSES} --dist worksteal --verbosity=1 --durations 50
+  - pytest --override-ini=python_files="${PYTEST_INCLUDE_GLOB}" --ignore-glob="${PYTEST_EXCLUDE_GLOB}" -m "${PYTEST_MARK_EXPRESSION}" -k "${PYTEST_MATCH_EXPRESSION}" --cov=usaspending_api --cov-report term --cov-report xml:coverage.$TRAVIS_JOB_INDEX.xml --reuse-db -r=fEs --numprocesses ${PYTEST_XDIST_NUMPROCESSES} --dist worksteal --verbosity=1 --durations 50
