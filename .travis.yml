@@ -159,7 +159,6 @@ jobs:
       - ls -lathr $HOME
       - ls -lathr $HOME/virtualenv
       - ls -lathr docker_images/
-      - pip show
       - pip list
       - docker images
       - docker exec -it ${BROKER_DOCKER_IMAGE} ls -lathr
