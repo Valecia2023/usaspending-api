@@ -236,7 +236,7 @@ jobs:
 
 before_install:
   # Reload any cached images and their layers from previous builds, to shorten docker pulls/builds
-  - docker load -i docker_images/images.tar || true
+  - docker load -i docker_images/*.tar || true
 
 install:
   # setuptools is pinned to version 60.8.2 due to an error occurring with built-in version
@@ -252,7 +252,7 @@ before_script:
   - travis_retry curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
   - ./cc-test-reporter before-build
-  - docker-compose up -d usaspending-db usaspending-es # TODO: use make or profiles
+  - make docker-compose-up-usaspending args="-d usaspending-db usaspending-es"
   # Wait for services to be up
   - ttl=30; echo "Try DB conn from container for $ttl seconds"; until [ $ttl -le 0 ] || psql $DATABASE_URL -c 'select 1 where 1=1'; do echo $ttl; ((ttl--)); sleep 1; done; [ $ttl -gt 0 ]
   - ttl=30; echo "Try ES conn from container for $ttl seconds"; until [ $ttl -le 0 ] || curl --silent -XGET --fail $ES_HOSTNAME; do echo $ttl; ((ttl--)); sleep 1; done; [ $ttl -gt 0 ]
